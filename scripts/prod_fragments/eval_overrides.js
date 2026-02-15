@@ -56,6 +56,8 @@ startEval = function() {
         if (done) {
             document.getElementById('onboarding-screen').classList.add('hidden');
             document.getElementById('eval-screen').classList.remove('hidden');
+            const footer = document.getElementById('criteria-footer');
+            if (footer) footer.classList.remove('hidden');
             showQuestion(currentIdx || 0);
         }
     }

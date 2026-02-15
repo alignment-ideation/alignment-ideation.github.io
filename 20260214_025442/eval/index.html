@@ -557,7 +557,7 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
             <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
         </div>
         <div class="stats">
-            <span id="progress-text">10 items &middot; generated 20260215_162321</span>
+            <span id="progress-text">10 items &middot; generated 20260215_163746</span>
         </div>
     </div>
 
@@ -1322,6 +1322,8 @@ startEval = function() {
         if (done) {
             document.getElementById('onboarding-screen').classList.add('hidden');
             document.getElementById('eval-screen').classList.remove('hidden');
+            const footer = document.getElementById('criteria-footer');
+            if (footer) footer.classList.remove('hidden');
             showQuestion(currentIdx || 0);
         }
     }
