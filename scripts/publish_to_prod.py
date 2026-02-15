@@ -77,7 +77,7 @@ def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
         "style_close": '</style>',
         "storage_key": "const STORAGE_KEY = 'idea_rankings_v3';",
         "script_close_last": '</script>\n</body>',
-        "download_btn_line": '<button class="btn btn-primary" onclick="downloadResults()">Download Rankings (JSON)</button>',
+        "download_btn_line": '<button class="btn btn-primary" id="submit-btn" onclick="downloadResults()">Download Rankings (JSON)</button>',
     }
 
     print("\n  Verifying anchors...")
