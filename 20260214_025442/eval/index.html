@@ -557,7 +557,7 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
             <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
         </div>
         <div class="stats">
-            <span id="progress-text">10 items &middot; generated 20260215_155521</span>
+            <span id="progress-text">10 items &middot; generated 20260215_162321</span>
         </div>
     </div>
 
@@ -635,7 +635,7 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
 </div>
 
 <!-- Criteria footer -->
-<div class="criteria-footer" id="criteria-footer">
+<div class="criteria-footer hidden" id="criteria-footer">
     <div class="criteria-grid">
         <div class="criteria-cell">
             <div class="cell-label good">Good</div>
@@ -716,6 +716,8 @@ function checkOnboardingComplete() {
 function startEval() {
     document.getElementById('onboarding-screen').classList.add('hidden');
     document.getElementById('eval-screen').classList.remove('hidden');
+    const footer = document.getElementById('criteria-footer');
+    if (footer) footer.classList.remove('hidden');
     showQuestion(0);
 }
 
@@ -1270,6 +1272,12 @@ const _regData = localStorage.getItem(REG_KEY);
 if (!_regData) {
     window.location.href = '../';
 }
+
+// Hide criteria footer until eval starts (should not show during onboarding)
+(function() {
+    const footer = document.getElementById('criteria-footer');
+    if (footer) footer.classList.add('hidden');
+})();
 
 function getRegistration() {
     try {

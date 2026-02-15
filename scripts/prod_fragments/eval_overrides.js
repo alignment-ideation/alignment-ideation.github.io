@@ -7,6 +7,12 @@ if (!_regData) {
     window.location.href = '../';
 }
 
+// Hide criteria footer until eval starts (should not show during onboarding)
+(function() {
+    const footer = document.getElementById('criteria-footer');
+    if (footer) footer.classList.add('hidden');
+})();
+
 function getRegistration() {
     try {
         const saved = localStorage.getItem(REG_KEY);
