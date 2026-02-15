@@ -1474,6 +1474,21 @@ submitAndNext = function() {
     }, 30000);
 };
 
+// Override keyboard handler: only allow shortcuts when eval screen is visible
+document.addEventListener('keydown', e => {
+    const evalScreen = document.getElementById('eval-screen');
+    if (!evalScreen || evalScreen.classList.contains('hidden')) {
+        // Block all eval shortcuts outside the eval screen
+        if (['ArrowRight', 'ArrowLeft', 'Enter'].includes(e.key) || e.key === 's' || e.key === 'S') {
+            e.stopImmediatePropagation();
+        }
+    }
+    // Also block when in any input field (not just textarea)
+    if (e.target.tagName === 'INPUT') {
+        e.stopImmediatePropagation();
+    }
+}, true); // capture phase — runs BEFORE the base handler
+
 // Init: registration screen controls the flow
 initRegistrationScreen();
 
