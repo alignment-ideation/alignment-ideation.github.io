@@ -27,16 +27,21 @@ async function sendResultsEmail(results) {
     const reg = getRegistration();
     if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
 
-    // Build a brief summary
     const ranked = results.ranked || 0;
     const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
 
     const templateParams = {
         to_name: reg.name,
         to_email: reg.email,
         eval_id: EVAL_ID,
         summary: `${ranked} of ${total} prompts ranked`,
-        results_json: JSON.stringify(results, null, 2),
+        results_json: dataUri,
     };
 
     try {
