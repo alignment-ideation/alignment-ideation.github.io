@@ -1,0 +1,9 @@
+# Config files contain API keys — keep locally, don't push to public repo
+config/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store

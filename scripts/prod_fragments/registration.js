@@ -23,6 +23,37 @@ function saveRegistration(data) {
     } catch(e) {}
 }
 
+function setScreenVisibility(screen) {
+    // screen: 'registration', 'onboarding', 'eval', 'summary'
+    const screens = ['registration-screen', 'onboarding-screen', 'eval-screen', 'summary-screen'];
+    screens.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+
+    const header = document.querySelector('.header');
+    const footer = document.getElementById('criteria-footer');
+
+    if (screen === 'registration') {
+        document.getElementById('registration-screen').classList.remove('hidden');
+        if (header) header.classList.add('hidden');
+        if (footer) footer.classList.add('hidden');
+    } else if (screen === 'onboarding') {
+        document.getElementById('onboarding-screen').classList.remove('hidden');
+        if (header) header.classList.add('hidden');
+        if (footer) footer.classList.add('hidden');
+    } else if (screen === 'eval') {
+        document.getElementById('eval-screen').classList.remove('hidden');
+        if (header) header.classList.remove('hidden');
+        if (footer) footer.classList.remove('hidden');
+        showQuestion();
+    } else if (screen === 'summary') {
+        document.getElementById('summary-screen').classList.remove('hidden');
+        if (header) header.classList.remove('hidden');
+        if (footer) footer.classList.add('hidden');
+    }
+}
+
 function handleRegistration(event) {
     event.preventDefault();
     const reg = {
@@ -39,16 +70,9 @@ function handleRegistration(event) {
     STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
     loadFromLocalStorage();
 
-    // Transition: hide registration, show onboarding (or eval if onboarding done)
-    document.getElementById('registration-screen').classList.add('hidden');
+    // Transition to onboarding (or eval if already done)
     const onboardingDone = localStorage.getItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email));
-    if (onboardingDone) {
-        document.getElementById('onboarding-screen').classList.add('hidden');
-        document.getElementById('eval-screen').classList.remove('hidden');
-        showQuestion();
-    } else {
-        document.getElementById('onboarding-screen').classList.remove('hidden');
-    }
+    setScreenVisibility(onboardingDone ? 'eval' : 'onboarding');
 }
 
 function initRegistrationScreen() {
@@ -57,21 +81,10 @@ function initRegistrationScreen() {
         // Already registered — skip to onboarding/eval
         STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(existing.email);
         loadFromLocalStorage();
-        document.getElementById('registration-screen').classList.add('hidden');
 
         const onboardingDone = localStorage.getItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(existing.email));
-        if (onboardingDone) {
-            document.getElementById('onboarding-screen').classList.add('hidden');
-            document.getElementById('eval-screen').classList.remove('hidden');
-            showQuestion();
-        } else {
-            document.getElementById('onboarding-screen').classList.remove('hidden');
-        }
+        setScreenVisibility(onboardingDone ? 'eval' : 'onboarding');
     } else {
-        // Show registration, hide everything else
-        document.getElementById('registration-screen').classList.remove('hidden');
-        document.getElementById('onboarding-screen').classList.add('hidden');
-        document.getElementById('eval-screen').classList.add('hidden');
-        document.getElementById('summary-screen').classList.add('hidden');
+        setScreenVisibility('registration');
     }
 }

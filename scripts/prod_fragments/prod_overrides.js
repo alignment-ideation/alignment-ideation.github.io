@@ -8,6 +8,15 @@ startEval = function() {
     if (reg) {
         localStorage.setItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email), 'true');
     }
+    // Ensure clean transition to eval screen
+    setScreenVisibility('eval');
+};
+
+// Override showSummary to hide criteria footer
+const _originalShowSummary = showSummary;
+showSummary = function() {
+    _originalShowSummary();
+    setScreenVisibility('summary');
 };
 
 // Override downloadResults to also submit to Firebase + email

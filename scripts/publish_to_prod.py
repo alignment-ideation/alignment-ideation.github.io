@@ -182,10 +182,15 @@ const EMAILJS_CONFIG = {json.dumps(emailjs_config)};"""
 """
     html = html.replace(anchors["script_close_last"], all_js + anchors["script_close_last"], 1)
 
-    # 7. Hide onboarding by default (registration shows first)
+    # 7. Hide onboarding and header by default (registration shows first)
     html = html.replace(
         '<div id="onboarding-screen">',
         '<div id="onboarding-screen" class="hidden">',
+        1
+    )
+    html = html.replace(
+        '<div class="header">',
+        '<div class="header hidden">',
         1
     )
 
