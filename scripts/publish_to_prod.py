@@ -1,20 +1,13 @@
 """
 Publish a stage 5 ranking UI HTML to production.
 
-Takes a self-contained stage 5 HTML and injects:
-  - Registration screen (HTML + CSS + JS)
-  - Firebase Firestore integration
-  - EmailJS email integration
-  - Prod overrides (namespaced localStorage, submit flow, auto-save)
+Outputs two pages:
+  {eval_id}/index.html  — Standalone registration form
+  {eval_id}/eval/index.html — Eval UI (stage 5 HTML + Firebase + email)
 
 Usage:
     python 8_human_ranking_ui_prod/scripts/publish_to_prod.py \
         --source 5_human_ranking_ui/20260214_210428/ranking_ui.html
-
-    # Override eval ID (defaults to parent folder name):
-    python 8_human_ranking_ui_prod/scripts/publish_to_prod.py \
-        --source 5_human_ranking_ui/20260214_210428/ranking_ui.html \
-        --eval-id my_custom_eval
 """
 
 import argparse
@@ -44,7 +37,6 @@ def parse_args():
 
 
 def read_fragment(name):
-    """Read a fragment file from prod_fragments/."""
     path = FRAGMENTS_DIR / name
     if not path.exists():
         print(f"ERROR: Fragment not found: {path}")
@@ -53,7 +45,6 @@ def read_fragment(name):
 
 
 def find_and_assert_anchor(html, anchor, name):
-    """Assert the anchor appears exactly once in the HTML."""
     count = html.count(anchor)
     if count == 0:
         print(f"ERROR: Anchor '{name}' not found in source HTML.")
@@ -66,72 +57,43 @@ def find_and_assert_anchor(html, anchor, name):
     return html.index(anchor)
 
 
-def main():
-    args = parse_args()
+def build_registration_page(eval_id):
+    """Build standalone registration page from template."""
+    template = read_fragment("registration_page.html")
+    return template.replace("{{EVAL_ID}}", eval_id)
 
-    if not args.source.exists():
-        print(f"ERROR: Source file not found: {args.source}")
-        sys.exit(1)
 
-    eval_id = args.eval_id or args.source.parent.name
-    print(f"Source: {args.source}")
-    print(f"Eval ID: {eval_id}")
+def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
+    """Inject Firebase/email/overrides into stage 5 HTML."""
+    html = source_html
 
-    # Load source HTML
-    html = args.source.read_text()
-    print(f"Source HTML: {len(html):,} chars, {len(html.splitlines()):,} lines")
-
-    # Load configs
-    firebase_config = json.loads(args.firebase.read_text()) if args.firebase.exists() else {}
-    emailjs_config = json.loads(args.emailjs.read_text()) if args.emailjs.exists() else {}
-
-    # Load fragments
-    reg_html = read_fragment("registration.html")
-    reg_css = read_fragment("registration.css")
-    reg_js = read_fragment("registration.js")
     firebase_js = read_fragment("firebase.js")
     emailjs_js = read_fragment("emailjs.js")
-    overrides_js = read_fragment("prod_overrides.js")
+    eval_overrides_js = read_fragment("eval_overrides.js")
 
-    # ---- Define anchors ----
+    # ---- Anchors ----
     anchors = {
         "marked_js": '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>',
         "style_close": '</style>',
-        "container_open": '<div class="container">',
         "storage_key": "const STORAGE_KEY = 'idea_rankings_v3';",
         "script_close_last": '</script>\n</body>',
         "download_btn_line": '<button class="btn btn-primary" onclick="downloadResults()">Download Rankings (JSON)</button>',
     }
 
-    # Verify all anchors
-    print("\nVerifying anchors...")
+    print("\n  Verifying anchors...")
     for name, anchor in anchors.items():
         pos = find_and_assert_anchor(html, anchor, name)
-        print(f"  {name}: found at position {pos}")
+        print(f"    {name}: position {pos}")
 
-    if args.dry_run:
-        print("\nDry run complete — all anchors found. No output written.")
-        return
-
-    # ---- Perform injections ----
-
-    # 1. CDN scripts: after marked.js
+    # 1. CDN scripts after marked.js
     cdn_scripts = '''
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>'''
-    html = html.replace(
-        anchors["marked_js"],
-        anchors["marked_js"] + cdn_scripts,
-        1
-    )
+    html = html.replace(anchors["marked_js"], anchors["marked_js"] + cdn_scripts, 1)
 
-    # 2. Registration CSS: before </style>
-    css_injection = f"\n/* ---- Prod: Registration ---- */\n{reg_css}\n"
-    # Also add hidden class if not present
-    css_injection += "\n.hidden { display: none !important; }\n"
-    # Submission status styles
-    css_injection += """
+    # 2. Submission status CSS before </style>
+    css_injection = """
 /* ---- Prod: Submission Status ---- */
 #submission-status {
     margin-top: 16px;
@@ -145,28 +107,21 @@ def main():
 """
     html = html.replace(anchors["style_close"], css_injection + anchors["style_close"], 1)
 
-    # 3. Registration HTML: after <div class="container">
-    html = html.replace(
-        anchors["container_open"],
-        anchors["container_open"] + "\n" + reg_html + "\n",
-        1
-    )
-
-    # 4. Replace download button line: change label + add status div after
+    # 3. Replace download button + add status div
     html = html.replace(
         anchors["download_btn_line"],
         '<button class="btn btn-primary" onclick="downloadResults()">Submit &amp; Download Rankings</button>\n            <div id="submission-status" class="hidden"></div>',
         1
     )
 
-    # 5. Replace STORAGE_KEY + inject constants
+    # 4. Replace STORAGE_KEY + inject constants
     constants_js = f"""let STORAGE_KEY = 'rankings_prod_{eval_id}_default';
 const EVAL_ID = '{eval_id}';
 const FIREBASE_CONFIG = {json.dumps(firebase_config)};
 const EMAILJS_CONFIG = {json.dumps(emailjs_config)};"""
     html = html.replace(anchors["storage_key"], constants_js, 1)
 
-    # 6. JS fragments: before </script></body>
+    # 5. JS: Firebase + EmailJS + overrides before </script></body>
     all_js = f"""
 /* ==== PROD INJECTIONS ==== */
 
@@ -174,48 +129,73 @@ const EMAILJS_CONFIG = {json.dumps(emailjs_config)};"""
 
 {emailjs_js}
 
-{reg_js}
-
-{overrides_js}
+{eval_overrides_js}
 
 /* ==== END PROD INJECTIONS ==== */
 """
     html = html.replace(anchors["script_close_last"], all_js + anchors["script_close_last"], 1)
 
-    # 7. Hide onboarding and header by default (registration shows first)
-    html = html.replace(
-        '<div id="onboarding-screen">',
-        '<div id="onboarding-screen" class="hidden">',
-        1
-    )
-    html = html.replace(
-        '<div class="header">',
-        '<div class="header hidden">',
-        1
-    )
+    return html
+
+
+def main():
+    args = parse_args()
+
+    if not args.source.exists():
+        print(f"ERROR: Source file not found: {args.source}")
+        sys.exit(1)
+
+    eval_id = args.eval_id or args.source.parent.name
+    print(f"Source: {args.source}")
+    print(f"Eval ID: {eval_id}")
+
+    source_html = args.source.read_text()
+    print(f"Source HTML: {len(source_html):,} chars, {len(source_html.splitlines()):,} lines")
+
+    firebase_config = json.loads(args.firebase.read_text()) if args.firebase.exists() else {}
+    emailjs_config = json.loads(args.emailjs.read_text()) if args.emailjs.exists() else {}
+
+    if args.dry_run:
+        # Just check eval page anchors
+        build_eval_page(source_html, eval_id, firebase_config, emailjs_config)
+        print("\nDry run complete — all anchors found.")
+        return
+
+    # ---- Build pages ----
+    print("\nBuilding registration page...")
+    reg_html = build_registration_page(eval_id)
+
+    print("Building eval page...")
+    eval_html = build_eval_page(source_html, eval_id, firebase_config, emailjs_config)
 
     # ---- Write output ----
     out_dir = PROD_DIR / eval_id
+    eval_dir = out_dir / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "index.html"
-    out_path.write_text(html)
+    eval_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write provenance config
+    reg_path = out_dir / "index.html"
+    reg_path.write_text(reg_html)
+    print(f"\n  Registration: {reg_path} ({len(reg_html.splitlines())} lines)")
+
+    eval_path = eval_dir / "index.html"
+    eval_path.write_text(eval_html)
+    print(f"  Eval:         {eval_path} ({len(eval_html.splitlines())} lines)")
+
     config = {
         "eval_id": eval_id,
         "source": str(args.source.resolve()),
         "firebase_project": firebase_config.get("projectId", "not_configured"),
         "emailjs_service": emailjs_config.get("service_id", "not_configured"),
-        "source_lines": len(args.source.read_text().splitlines()),
-        "output_lines": len(html.splitlines()),
     }
     config_path = out_dir / "config.json"
     config_path.write_text(json.dumps(config, indent=2) + "\n")
 
-    print(f"\nPublished to: {out_path}")
-    print(f"  {len(html.splitlines()):,} lines ({len(html):,} chars)")
-    print(f"  Config: {config_path}")
-    print(f"\nTo deploy: git add {out_dir} && git commit && git push")
+    print(f"  Config:       {config_path}")
+    print(f"\n  URLs:")
+    print(f"    Registration: .../{eval_id}/")
+    print(f"    Eval:         .../{eval_id}/eval/")
+    print(f"\n  To deploy: git add {out_dir} && git commit && git push")
 
 
 if __name__ == "__main__":
