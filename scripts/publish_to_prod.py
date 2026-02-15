@@ -85,8 +85,9 @@ def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
         pos = find_and_assert_anchor(html, anchor, name)
         print(f"    {name}: position {pos}")
 
-    # 1. CDN scripts after marked.js
+    # 1. Favicon + CDN scripts after marked.js
     cdn_scripts = '''
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>'''
