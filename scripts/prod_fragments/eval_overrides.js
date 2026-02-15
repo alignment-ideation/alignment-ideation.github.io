@@ -108,7 +108,7 @@ downloadResults = async function() {
         } else if (emailResult.reason === 'not_configured') {
             parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
         } else {
-            parts.push('<span style="color:var(--primary)">&#10007; Email failed — your download has your data</span>');
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
         }
         statusEl.innerHTML = parts.join('<br>');
     }
