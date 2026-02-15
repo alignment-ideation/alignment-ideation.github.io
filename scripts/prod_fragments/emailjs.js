@@ -54,6 +54,7 @@ async function sendResultsEmail(results) {
         return { success: true };
     } catch(e) {
         console.error('Email send failed:', e);
-        return { success: false, reason: e.message || String(e) };
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
     }
 }
