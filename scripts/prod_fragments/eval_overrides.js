@@ -50,7 +50,7 @@ startEval = function() {
         if (done) {
             document.getElementById('onboarding-screen').classList.add('hidden');
             document.getElementById('eval-screen').classList.remove('hidden');
-            showQuestion();
+            showQuestion(currentIdx || 0);
         }
     }
 })();
