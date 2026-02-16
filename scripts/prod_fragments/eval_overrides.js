@@ -38,11 +38,14 @@ function hashEmail(email) {
     }
 })();
 
-// Fix: mark onboarding done on startEval (base v3 never sets this)
+// Fix: mark onboarding done on startEval, namespace timer per eval+rater
 const _originalStartEval = startEval;
 startEval = function() {
-    _originalStartEval();
     const reg = getRegistration();
+    if (reg) {
+        TIMER_STORAGE = 'eval_timer_start_' + EVAL_ID + '_' + hashEmail(reg.email);
+    }
+    _originalStartEval();
     if (reg) {
         localStorage.setItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email), 'true');
     }
@@ -54,10 +57,12 @@ startEval = function() {
     if (reg) {
         const done = localStorage.getItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email));
         if (done) {
+            TIMER_STORAGE = 'eval_timer_start_' + EVAL_ID + '_' + hashEmail(reg.email);
             document.getElementById('onboarding-screen').classList.add('hidden');
             document.getElementById('eval-screen').classList.remove('hidden');
             const footer = document.getElementById('criteria-footer');
             if (footer) footer.classList.remove('hidden');
+            startTimer();
             showQuestion(currentIdx || 0);
         }
     }

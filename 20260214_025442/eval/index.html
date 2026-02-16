@@ -570,6 +570,23 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
     padding: 4px 8px;
 }
 .help-close:hover { color: var(--text); }
+/* Timer */
+.timer {
+    font-family: 'SF Mono', 'Menlo', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    min-width: 70px;
+    text-align: center;
+}
+.timer.warning { color: var(--warning); border-color: var(--warning); }
+.timer.danger { color: var(--danger, #d35d4e); border-color: var(--danger, #d35d4e); }
+.timer.expired { color: var(--danger, #d35d4e); border-color: var(--danger, #d35d4e); animation: pulse 1s ease-in-out 3; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* ---- Prod: Submission Status ---- */
 #submission-status {
@@ -592,7 +609,7 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
             <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
         </div>
         <div class="stats">
-            <span id="progress-text">10 items &middot; generated 20260216_124440</span>
+            <span id="progress-text">10 items &middot; generated 20260216_161014</span>
         </div>
     </div>
 
@@ -619,6 +636,7 @@ kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px
                 <button class="btn btn-secondary" onclick="skipItem()">Skip (S)</button>
                 <button class="btn btn-secondary" style="background:#FEF7ED;color:#856404;border-color:#D4A574;" onclick="showSummary()">Summary</button>
                 <button class="btn btn-secondary" onclick="showHelp()" style="font-weight:700">Help</button>
+                <span class="timer" id="timer">90:00</span>
             </div>
         </div>
 
@@ -763,6 +781,7 @@ function startEval() {
     document.getElementById('eval-screen').classList.remove('hidden');
     const footer = document.getElementById('criteria-footer');
     if (footer) footer.classList.remove('hidden');
+    startTimer();
     showQuestion(0);
 }
 
@@ -817,6 +836,7 @@ function escapeHtml(s) {
     if (onboardingDone) {
         document.getElementById('onboarding-screen').classList.add('hidden');
         document.getElementById('eval-screen').classList.remove('hidden');
+        startTimer();
         showQuestion(0);
     }
 })();
@@ -1240,6 +1260,41 @@ document.addEventListener('keydown', e => {
     }
 }, true);
 
+/* ---- 90-minute Timer ---- */
+const TIMER_DURATION = 90 * 60; // seconds
+let TIMER_STORAGE = 'eval_timer_start';
+let timerInterval = null;
+
+function startTimer() {
+    if (!localStorage.getItem(TIMER_STORAGE)) {
+        localStorage.setItem(TIMER_STORAGE, Date.now().toString());
+    }
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function updateTimer() {
+    const startTime = parseInt(localStorage.getItem(TIMER_STORAGE));
+    if (!startTime) return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remaining = Math.max(0, TIMER_DURATION - elapsed);
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    const el = document.getElementById('timer');
+    if (!el) return;
+    el.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    el.classList.remove('warning', 'danger', 'expired');
+    if (remaining === 0) {
+        el.classList.add('expired');
+        el.textContent = '00:00';
+        clearInterval(timerInterval);
+    } else if (remaining <= 300) {
+        el.classList.add('danger');
+    } else if (remaining <= 900) {
+        el.classList.add('warning');
+    }
+}
+
 /* ==== PROD INJECTIONS ==== */
 
 /* ---- Firebase ---- */
@@ -1390,11 +1445,14 @@ function hashEmail(email) {
     }
 })();
 
-// Fix: mark onboarding done on startEval (base v3 never sets this)
+// Fix: mark onboarding done on startEval, namespace timer per eval+rater
 const _originalStartEval = startEval;
 startEval = function() {
-    _originalStartEval();
     const reg = getRegistration();
+    if (reg) {
+        TIMER_STORAGE = 'eval_timer_start_' + EVAL_ID + '_' + hashEmail(reg.email);
+    }
+    _originalStartEval();
     if (reg) {
         localStorage.setItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email), 'true');
     }
@@ -1406,10 +1464,12 @@ startEval = function() {
     if (reg) {
         const done = localStorage.getItem('onboarding_prod_' + EVAL_ID + '_' + hashEmail(reg.email));
         if (done) {
+            TIMER_STORAGE = 'eval_timer_start_' + EVAL_ID + '_' + hashEmail(reg.email);
             document.getElementById('onboarding-screen').classList.add('hidden');
             document.getElementById('eval-screen').classList.remove('hidden');
             const footer = document.getElementById('criteria-footer');
             if (footer) footer.classList.remove('hidden');
+            startTimer();
             showQuestion(currentIdx || 0);
         }
     }
