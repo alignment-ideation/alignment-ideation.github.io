@@ -75,10 +75,18 @@ def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
     anchors = {
         "marked_js": '<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>',
         "style_close": '</style>',
-        "storage_key": "const STORAGE_KEY = 'idea_rankings_v3';",
+        "storage_key": None,  # detected dynamically below
         "script_close_last": '</script>\n</body>',
         "download_btn_line": '<button class="btn btn-primary" id="submit-btn" onclick="downloadResults()">Download Rankings (JSON)</button>',
     }
+
+    # Detect STORAGE_KEY version dynamically
+    import re as _re
+    sk_match = _re.search(r"const STORAGE_KEY = 'idea_rankings_v\d+';", html)
+    if not sk_match:
+        print("ERROR: Could not find STORAGE_KEY line in source HTML.")
+        sys.exit(1)
+    anchors["storage_key"] = sk_match.group(0)
 
     print("\n  Verifying anchors...")
     for name, anchor in anchors.items():
