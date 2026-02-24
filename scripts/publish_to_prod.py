@@ -116,10 +116,10 @@ def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
 """
     html = html.replace(anchors["style_close"], css_injection + anchors["style_close"], 1)
 
-    # 3. Replace download button + add status div
+    # 3. Replace download button + add status div (preserve id and disabled for 6/10 enforcement)
     html = html.replace(
         anchors["download_btn_line"],
-        '<button class="btn btn-primary" onclick="downloadResults()">Submit &amp; Download Rankings</button>\n            <div id="submission-status" class="hidden"></div>',
+        '<button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0/6 ranked)</button>\n            <div id="submission-status" class="hidden"></div>',
         1
     )
 
