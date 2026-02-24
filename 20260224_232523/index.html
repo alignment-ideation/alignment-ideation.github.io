@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alignment Research Evaluation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #A8523A;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --border: #E0DDD4;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+}
+.card {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 40px;
+    max-width: 560px;
+    width: 100%;
+}
+h1 {
+    color: var(--primary);
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.5;
+}
+.field {
+    margin-bottom: 22px;
+}
+.field > label:first-child {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="url"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--surface);
+    transition: border-color 0.2s;
+}
+.field input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.req { color: var(--primary); }
+.optional { color: var(--text-secondary); font-weight: 400; font-size: 0.9em; }
+.radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 400;
+    background: var(--surface);
+    user-select: none;
+    font-size: 14px;
+}
+.radio-label:hover {
+    border-color: var(--primary);
+    background: #faf5f2;
+}
+.radio-label:has(input:checked) {
+    border-color: var(--primary);
+    background: #f5e6df;
+    font-weight: 600;
+}
+.radio-label input[type="radio"] {
+    accent-color: var(--primary);
+    margin: 0;
+}
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 8px;
+}
+.submit-btn:hover { background: var(--primary-hover); }
+.submit-btn:disabled {
+    background: var(--border);
+    cursor: not-allowed;
+}
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>Alignment Research Evaluation</h1>
+    <p class="subtitle">Please fill in your details to begin the evaluation.</p>
+    <form id="registration-form">
+        <div class="field">
+            <label for="reg-name">Name <span class="req">*</span></label>
+            <input type="text" id="reg-name" required autocomplete="name">
+        </div>
+        <div class="field">
+            <label for="reg-email">Email <span class="req">*</span></label>
+            <input type="email" id="reg-email" required autocomplete="email">
+        </div>
+        <div class="field">
+            <label for="reg-scholar">Google Scholar <span class="optional">(optional)</span></label>
+            <input type="url" id="reg-scholar" placeholder="https://scholar.google.com/citations?user=..." autocomplete="url">
+        </div>
+        <div class="field">
+            <label>Experience doing technical empirical AI safety research <span class="req">*</span></label>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="experience" value="0_months" required><span>0 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="3_months"><span>3 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="6_months"><span>6 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="12_months"><span>12 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="18_months"><span>18 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="2_plus_years"><span>&ge;2 years</span></label>
+            </div>
+        </div>
+        <div class="field">
+            <label>Available time commitment over next 3 weeks <span class="req">*</span></label>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="commitment" value="lt_5_hours" required><span>&lt;5 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="5_hours"><span>5 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="10_hours"><span>10 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="20_hours"><span>20 hours</span></label>
+            </div>
+        </div>
+        <button type="submit" class="submit-btn">Continue to Evaluation &rarr;</button>
+    </form>
+</div>
+
+<script>
+const EVAL_ID = '20260224_232523';
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+// If already registered, go straight to eval
+const existing = localStorage.getItem(REG_KEY);
+if (existing) {
+    window.location.href = 'eval/';
+}
+
+document.getElementById('registration-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const reg = {
+        name: document.getElementById('reg-name').value.trim(),
+        email: document.getElementById('reg-email').value.trim(),
+        google_scholar: document.getElementById('reg-scholar').value.trim() || null,
+        experience: document.querySelector('input[name="experience"]:checked').value,
+        commitment: document.querySelector('input[name="commitment"]:checked').value,
+        registered_at: new Date().toISOString(),
+    };
+    localStorage.setItem(REG_KEY, JSON.stringify(reg));
+    window.location.href = 'eval/';
+});
+</script>
+</body>
+</html>
