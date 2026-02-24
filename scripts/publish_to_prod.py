@@ -77,7 +77,7 @@ def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
         "style_close": '</style>',
         "storage_key": None,  # detected dynamically below
         "script_close_last": '</script>\n</body>',
-        "download_btn_line": '<button class="btn btn-primary" id="submit-btn" onclick="downloadResults()">Download Rankings (JSON)</button>',
+        "download_btn_line": '<button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Download Rankings (0/6 ranked)</button>',
     }
 
     # Detect STORAGE_KEY version dynamically
