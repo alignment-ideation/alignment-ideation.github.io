@@ -383,11 +383,11 @@ h1 {
         <hr class="section-divider">
 
         <div class="field">
-            <label>Ability to work in the US / UK <span class="req">*</span></label>
+            <label>Permission to work in the US / UK <span class="req">*</span></label>
             <div class="field-hint">Select all that apply (at least one required)</div>
             <div class="checkbox-group">
-                <label class="checkbox-label"><input type="checkbox" id="work-us" value="us"><span>Able to work in the US</span></label>
-                <label class="checkbox-label"><input type="checkbox" id="work-uk" value="uk"><span>Able to work in the UK</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="work-us" value="us"><span>Permission to work in the US</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="work-uk" value="uk"><span>Permission to work in the UK</span></label>
             </div>
             <div class="field-error" id="err-work">Please select at least one</div>
         </div>
@@ -477,16 +477,25 @@ function initFirebase() {
 initFirebase();
 
 // ---- Areas grid ----
-const PRESET_AREAS = [
-    'AI Control',
-    'Model Organisms',
-    'Alignment Training Techniques',
-    'Scalable Oversight',
+// Broad areas first (alphabetical), then a gap, then narrow areas (alphabetical)
+const BROAD_AREAS = [
     'Adversarial Robustness',
-    'Prompt Injection Threats',
-    'Data Poisoning',
+    'AI Control',
+    'ML Security',
+    'Model Organisms',
+    'Scalable Oversight',
+];
+const NARROW_AREAS = [
+    'Agentic Safety',
     'Alignment Auditing Agents',
-    'CoT Monitorability',
+    'Alignment Training Techniques',
+    'Automated Alignment Research',
+    'CoT Monitorability / Faithfulness',
+    'Data Poisoning',
+    'Emergent Misalignment',
+    'Eval Awareness / Sandbagging',
+    'Knowledge Unlearning / Capability Control',
+    'Prompt Injection Threats',
 ];
 let customAreaCount = 0;
 
@@ -538,9 +547,24 @@ function buildAreaRow(name, isCustom) {
     return tr;
 }
 
+function buildSeparatorRow() {
+    const tr = document.createElement('tr');
+    tr.className = 'area-separator';
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.style.height = '12px';
+    td.style.borderBottom = 'none';
+    tr.appendChild(td);
+    return tr;
+}
+
 function initAreasGrid() {
     const tbody = document.getElementById('areas-tbody');
-    PRESET_AREAS.forEach(name => {
+    BROAD_AREAS.forEach(name => {
+        tbody.appendChild(buildAreaRow(name, false));
+    });
+    tbody.appendChild(buildSeparatorRow());
+    NARROW_AREAS.forEach(name => {
         tbody.appendChild(buildAreaRow(name, false));
     });
 }
