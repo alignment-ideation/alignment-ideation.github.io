@@ -657,7 +657,7 @@ initAreasGrid();
 async function uploadCV(file, email) {
     if (!_storage) {
         console.warn('Firebase Storage not configured — skipping upload');
-        return { url: null, filename: file.name };
+        return { path: null, filename: file.name };
     }
 
     const hash = hashStr(email);
@@ -683,12 +683,11 @@ async function uploadCV(file, email) {
                 textEl.style.color = 'var(--error)';
                 reject(error);
             },
-            async () => {
-                const url = await task.snapshot.ref.getDownloadURL();
+            () => {
                 fillEl.style.width = '100%';
                 textEl.textContent = 'Uploaded successfully';
                 textEl.style.color = 'var(--success)';
-                resolve({ url: url, filename: file.name });
+                resolve({ path: path, filename: file.name });
             }
         );
     });
@@ -794,7 +793,7 @@ document.getElementById('registration-form').addEventListener('submit', async fu
 
     // Upload CV (can be slow)
     const cvFile = document.getElementById('reg-cv').files[0];
-    let cvResult = { url: null, filename: null };
+    let cvResult = { path: null, filename: null };
     try {
         submitBtn.textContent = 'Uploading CV...';
         cvResult = await uploadCV(cvFile, email);
@@ -820,7 +819,7 @@ document.getElementById('registration-form').addEventListener('submit', async fu
             areas: areas,
             google_scholar: document.getElementById('reg-scholar').value.trim() || null,
             linkedin: document.getElementById('reg-linkedin').value.trim() || null,
-            cv_url: cvResult.url,
+            cv_path: cvResult.path,
             cv_filename: cvResult.filename,
             registered_at: new Date().toISOString(),
         };
