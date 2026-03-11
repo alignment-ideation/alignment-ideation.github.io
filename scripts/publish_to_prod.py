@@ -57,10 +57,12 @@ def find_and_assert_anchor(html, anchor, name):
     return html.index(anchor)
 
 
-def build_registration_page(eval_id):
+def build_registration_page(eval_id, firebase_config):
     """Build standalone registration page from template."""
     template = read_fragment("registration_page.html")
-    return template.replace("{{EVAL_ID}}", eval_id)
+    template = template.replace("{{EVAL_ID}}", eval_id)
+    template = template.replace("{{FIREBASE_CONFIG}}", json.dumps(firebase_config))
+    return template
 
 
 def build_eval_page(source_html, eval_id, firebase_config, emailjs_config):
@@ -172,7 +174,7 @@ def main():
 
     # ---- Build pages ----
     print("\nBuilding registration page...")
-    reg_html = build_registration_page(eval_id)
+    reg_html = build_registration_page(eval_id, firebase_config)
 
     print("Building eval page...")
     eval_html = build_eval_page(source_html, eval_id, firebase_config, emailjs_config)
