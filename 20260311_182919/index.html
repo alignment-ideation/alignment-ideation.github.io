@@ -553,6 +553,7 @@ function buildAreaRow(name, isCustom, tooltip) {
     const key = isCustom ? 'custom_' + (customAreaCount++) : areaKey(name);
     const tr = document.createElement('tr');
     tr.dataset.areaKey = key;
+    tr.dataset.areaName = name;
     tr.dataset.isCustom = isCustom ? '1' : '0';
 
     const tdName = document.createElement('td');
@@ -781,7 +782,7 @@ document.getElementById('registration-form').addEventListener('submit', async fu
         if (row.dataset.isCustom === '1') {
             areaName = row.querySelector('.custom-area-name').value.trim();
         } else {
-            areaName = row.querySelector('td:first-child').textContent.trim();
+            areaName = row.dataset.areaName || '';
         }
         const checked = row.querySelector('input[type="radio"]:checked');
         if (areaName && checked) {
