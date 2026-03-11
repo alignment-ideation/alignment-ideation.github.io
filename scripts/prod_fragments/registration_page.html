@@ -773,38 +773,41 @@ document.getElementById('registration-form').addEventListener('submit', async fu
     const submitBtn = document.getElementById('submit-btn');
     const statusEl = document.getElementById('submit-status');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting...';
     statusEl.textContent = '';
 
-    try {
-        // Collect areas
-        const areas = {};
-        document.querySelectorAll('#areas-tbody tr').forEach(row => {
-            let areaName;
-            if (row.dataset.isCustom === '1') {
-                areaName = row.querySelector('.custom-area-name').value.trim();
-            } else {
-                areaName = row.querySelector('td:first-child').textContent.trim();
-            }
-            const checked = row.querySelector('input[type="radio"]:checked');
-            if (areaName && checked) {
-                areas[areaKey(areaName)] = checked.value;
-            }
-        });
-
-        const email = document.getElementById('reg-email').value.trim();
-
-        // Upload CV
-        const cvFile = document.getElementById('reg-cv').files[0];
-        let cvResult = { url: null, filename: null };
-        try {
-            cvResult = await uploadCV(cvFile, email);
-        } catch(err) {
-            statusEl.innerHTML = '<span style="color:var(--error)">CV upload failed. Please try again.</span>';
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit registration & continue to eval \u2192';
-            return;
+    // Collect areas first (fast)
+    const areas = {};
+    document.querySelectorAll('#areas-tbody tr').forEach(row => {
+        let areaName;
+        if (row.dataset.isCustom === '1') {
+            areaName = row.querySelector('.custom-area-name').value.trim();
+        } else {
+            areaName = row.querySelector('td:first-child').textContent.trim();
         }
+        const checked = row.querySelector('input[type="radio"]:checked');
+        if (areaName && checked) {
+            areas[areaKey(areaName)] = checked.value;
+        }
+    });
+
+    const email = document.getElementById('reg-email').value.trim();
+
+    // Upload CV (can be slow)
+    const cvFile = document.getElementById('reg-cv').files[0];
+    let cvResult = { url: null, filename: null };
+    try {
+        submitBtn.textContent = 'Uploading CV...';
+        cvResult = await uploadCV(cvFile, email);
+    } catch(err) {
+        statusEl.innerHTML = '<span style="color:var(--error)">CV upload failed. Please try again.</span>';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit registration & continue to eval \u2192';
+        return;
+    }
+
+    submitBtn.textContent = 'Saving registration...';
+
+    try {
 
         const reg = {
             name: document.getElementById('reg-name').value.trim(),
