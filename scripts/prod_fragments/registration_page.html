@@ -547,13 +547,23 @@ function buildAreaRow(name, isCustom) {
     return tr;
 }
 
-function buildSeparatorRow() {
+function buildSeparatorRow(label) {
     const tr = document.createElement('tr');
     tr.className = 'area-separator';
     const td = document.createElement('td');
     td.colSpan = 5;
-    td.style.height = '12px';
-    td.style.borderBottom = 'none';
+    if (label) {
+        td.style.paddingTop = '14px';
+        td.style.paddingBottom = '6px';
+        td.style.borderBottom = 'none';
+        td.style.fontSize = '13px';
+        td.style.color = '#666';
+        td.style.fontStyle = 'italic';
+        td.textContent = label;
+    } else {
+        td.style.height = '12px';
+        td.style.borderBottom = 'none';
+    }
     tr.appendChild(td);
     return tr;
 }
@@ -563,7 +573,7 @@ function initAreasGrid() {
     BROAD_AREAS.forEach(name => {
         tbody.appendChild(buildAreaRow(name, false));
     });
-    tbody.appendChild(buildSeparatorRow());
+    tbody.appendChild(buildSeparatorRow('Optional (if you have strong / very strong, please mention)'));
     NARROW_AREAS.forEach(name => {
         tbody.appendChild(buildAreaRow(name, false));
     });
