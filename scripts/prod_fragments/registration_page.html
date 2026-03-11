@@ -241,9 +241,52 @@ h1 {
 .remove-area-btn:hover {
     color: var(--error);
 }
-.area-name-with-tip {
-    border-bottom: 1px dotted #999;
+.area-name-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.area-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ccc;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
     cursor: help;
+    flex-shrink: 0;
+}
+.area-tip:hover {
+    background: #999;
+}
+.area-tip .area-tip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
+    width: 280px;
+    z-index: 100;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    white-space: normal;
+}
+.area-tip:hover .area-tip-text {
+    visibility: visible;
+    opacity: 1;
 }
 
 /* File upload */
@@ -498,6 +541,7 @@ const NARROW_AREAS = [
     'Eval Awareness / Sandbagging',
     'Knowledge Unlearning / Capability Control',
     'Prompt Injection Threats',
+    'Red-teaming / Production Classifiers',
 ];
 let customAreaCount = 0;
 
@@ -533,11 +577,19 @@ function buildAreaRow(name, isCustom, tooltip) {
         tdName.appendChild(wrapper);
     } else {
         if (tooltip) {
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'area-name-with-tip';
-            nameSpan.textContent = name;
-            nameSpan.title = tooltip;
-            tdName.appendChild(nameSpan);
+            const wrap = document.createElement('span');
+            wrap.className = 'area-name-wrap';
+            const label = document.createTextNode(name);
+            wrap.appendChild(label);
+            const tip = document.createElement('span');
+            tip.className = 'area-tip';
+            tip.textContent = '?';
+            const tipText = document.createElement('span');
+            tipText.className = 'area-tip-text';
+            tipText.textContent = tooltip;
+            tip.appendChild(tipText);
+            wrap.appendChild(tip);
+            tdName.appendChild(wrap);
         } else {
             tdName.textContent = name;
         }
