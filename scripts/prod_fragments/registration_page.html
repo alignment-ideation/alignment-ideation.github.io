@@ -241,6 +241,10 @@ h1 {
 .remove-area-btn:hover {
     color: var(--error);
 }
+.area-name-with-tip {
+    border-bottom: 1px dotted #999;
+    cursor: help;
+}
 
 /* File upload */
 .file-upload-area {
@@ -411,7 +415,7 @@ h1 {
                 </tbody>
             </table>
             <button type="button" class="add-area-btn" id="add-area-btn">+ Add custom area</button>
-            <div class="field-error" id="err-areas">Please rate all areas</div>
+            <div class="field-error" id="err-areas">Please rate all broad areas</div>
         </div>
 
         <hr class="section-divider">
@@ -479,11 +483,9 @@ initFirebase();
 // ---- Areas grid ----
 // Broad areas first (alphabetical), then a gap, then narrow areas (alphabetical)
 const BROAD_AREAS = [
-    'Adversarial Robustness',
-    'AI Control',
-    'ML Security',
-    'Model Organisms',
-    'Scalable Oversight',
+    { name: 'Adversarial Robustness and AI Control', tooltip: 'Creating methods to ensure advanced AI systems remain safe and harmless in unfamiliar or adversarial scenarios.' },
+    { name: 'Model Organisms', tooltip: 'Creating model organisms of misalignment to improve our empirical understanding of how alignment failures might arise.' },
+    { name: 'Scalable Oversight', tooltip: 'Developing techniques to keep highly capable models helpful and honest, even as they surpass human-level intelligence in various domains.' },
 ];
 const NARROW_AREAS = [
     'Agentic Safety',
@@ -503,7 +505,7 @@ function areaKey(name) {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
-function buildAreaRow(name, isCustom) {
+function buildAreaRow(name, isCustom, tooltip) {
     const key = isCustom ? 'custom_' + (customAreaCount++) : areaKey(name);
     const tr = document.createElement('tr');
     tr.dataset.areaKey = key;
@@ -530,7 +532,15 @@ function buildAreaRow(name, isCustom) {
         wrapper.appendChild(removeBtn);
         tdName.appendChild(wrapper);
     } else {
-        tdName.textContent = name;
+        if (tooltip) {
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'area-name-with-tip';
+            nameSpan.textContent = name;
+            nameSpan.title = tooltip;
+            tdName.appendChild(nameSpan);
+        } else {
+            tdName.textContent = name;
+        }
     }
     tr.appendChild(tdName);
 
@@ -570,8 +580,10 @@ function buildSeparatorRow(label) {
 
 function initAreasGrid() {
     const tbody = document.getElementById('areas-tbody');
-    BROAD_AREAS.forEach(name => {
-        tbody.appendChild(buildAreaRow(name, false));
+    BROAD_AREAS.forEach(area => {
+        const row = buildAreaRow(area.name, false, area.tooltip);
+        row.dataset.broad = '1';
+        tbody.appendChild(row);
     });
     tbody.appendChild(buildSeparatorRow('Optional (if you have strong / very strong, please mention)'));
     NARROW_AREAS.forEach(name => {
@@ -677,18 +689,19 @@ function validateForm() {
 
     // Validate all area rows have a selection
     const rows = document.querySelectorAll('#areas-tbody tr');
-    let allAreasRated = true;
+    let allBroadRated = true;
     rows.forEach(row => {
-        const key = row.dataset.areaKey;
+        if (row.classList.contains('area-separator')) return;
         const checked = row.querySelector('input[type="radio"]:checked');
-        if (!checked) allAreasRated = false;
-        // For custom areas, also check name is filled
-        if (row.dataset.isCustom === '1') {
+        // Only broad areas are required
+        if (row.dataset.broad === '1' && !checked) allBroadRated = false;
+        // For custom areas, check name is filled if a rating was selected
+        if (row.dataset.isCustom === '1' && checked) {
             const nameInput = row.querySelector('.custom-area-name');
-            if (!nameInput.value.trim()) allAreasRated = false;
+            if (!nameInput.value.trim()) allBroadRated = false;
         }
     });
-    if (!allAreasRated) {
+    if (!allBroadRated) {
         showError('err-areas'); valid = false;
     }
 
