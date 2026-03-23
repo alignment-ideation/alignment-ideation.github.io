@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alignment Research Evaluation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #A8523A;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --border: #E0DDD4;
+    --success: #4A9B7F;
+    --error: #c0392b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+}
+.card {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 40px;
+    max-width: 780px;
+    width: 100%;
+}
+h1 {
+    color: var(--primary);
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.5;
+}
+.field {
+    margin-bottom: 22px;
+}
+.field > label:first-child,
+.field > .field-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="url"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--surface);
+    transition: border-color 0.2s;
+}
+.field input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.req { color: var(--primary); }
+.optional { color: var(--text-secondary); font-weight: 400; font-size: 0.9em; }
+.field-hint {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 4px;
+}
+.radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 400;
+    background: var(--surface);
+    user-select: none;
+    font-size: 14px;
+}
+.radio-label:hover {
+    border-color: var(--primary);
+    background: #faf5f2;
+}
+.radio-label:has(input:checked) {
+    border-color: var(--primary);
+    background: #f5e6df;
+    font-weight: 600;
+}
+.radio-label input[type="radio"] {
+    accent-color: var(--primary);
+    margin: 0;
+}
+
+/* Checkbox group */
+.checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 6px;
+}
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 400;
+    background: var(--surface);
+    user-select: none;
+    font-size: 14px;
+}
+.checkbox-label:hover {
+    border-color: var(--primary);
+    background: #faf5f2;
+}
+.checkbox-label:has(input:checked) {
+    border-color: var(--primary);
+    background: #f5e6df;
+    font-weight: 600;
+}
+.checkbox-label input[type="checkbox"] {
+    accent-color: var(--primary);
+    margin: 0;
+}
+
+/* Areas grid */
+.areas-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 14px;
+}
+.areas-table th {
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+    position: relative;
+}
+.areas-table th .th-hint {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    color: #999;
+    line-height: 1.3;
+    margin-top: 2px;
+}
+.areas-table th:first-child {
+    text-align: left;
+    width: 220px;
+}
+.areas-table td {
+    padding: 8px 4px;
+    text-align: center;
+    border-bottom: 1px solid #f0ede6;
+}
+.areas-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+    font-size: 14px;
+}
+.areas-table tr:hover {
+    background: #faf9f6;
+}
+.areas-table input[type="radio"] {
+    accent-color: var(--primary);
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+.custom-area-name {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+}
+.custom-area-name:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.add-area-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 6px 14px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.add-area-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+.remove-area-btn {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    transition: color 0.15s;
+}
+.remove-area-btn:hover {
+    color: var(--error);
+}
+.area-name-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.area-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ccc;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: help;
+    flex-shrink: 0;
+}
+.area-tip:hover {
+    background: #999;
+}
+.area-tip .area-tip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #333;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
+    width: 280px;
+    z-index: 100;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    white-space: normal;
+}
+.area-tip:hover .area-tip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* File upload */
+.file-upload-area {
+    margin-top: 6px;
+}
+.file-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.file-input-wrapper input[type="file"] {
+    font-family: inherit;
+    font-size: 14px;
+}
+.file-name {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+.upload-progress {
+    margin-top: 8px;
+    display: none;
+}
+.upload-progress .progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+.upload-progress .progress-fill {
+    height: 100%;
+    background: var(--primary);
+    border-radius: 3px;
+    transition: width 0.3s;
+    width: 0%;
+}
+.upload-progress .progress-text {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+/* Validation */
+.field-error {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 4px;
+    display: none;
+}
+.field.has-error .field-error {
+    display: block;
+}
+.field.has-error input[type="text"],
+.field.has-error input[type="email"],
+.field.has-error input[type="url"] {
+    border-color: var(--error);
+}
+
+/* Submit */
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 8px;
+}
+.submit-btn:hover { background: var(--primary-hover); }
+.submit-btn:disabled {
+    background: var(--border);
+    cursor: not-allowed;
+}
+.submit-status {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 14px;
+}
+
+/* Section divider */
+.section-divider {
+    border: none;
+    border-top: 2px solid var(--border);
+    margin: 28px 0;
+}
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>Alignment Research Evaluation</h1>
+    <p class="subtitle">Please fill in your details to begin the evaluation.</p>
+    <form id="registration-form">
+        <div class="field">
+            <label for="reg-name">Name <span class="req">*</span></label>
+            <input type="text" id="reg-name" required autocomplete="name">
+            <div class="field-error" id="err-name">Please enter your name</div>
+        </div>
+        <div class="field">
+            <label for="reg-email">Email <span class="req">*</span></label>
+            <input type="email" id="reg-email" required autocomplete="email">
+            <div class="field-error" id="err-email">Please enter a valid email</div>
+        </div>
+        <div class="field">
+            <label for="reg-org">Current organisation / affiliation <span class="req">*</span></label>
+            <input type="text" id="reg-org" required autocomplete="organization" placeholder="e.g. MATS">
+            <div class="field-error" id="err-org">Please enter your organisation</div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div class="field">
+            <label>Experience in technical AI safety research <span class="req">*</span></label>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="experience" value="lte_3_months" required><span>&le;3 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="3_6_months"><span>3&ndash;6 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="6_12_months"><span>6&ndash;12 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="12_24_months"><span>12&ndash;24 months</span></label>
+                <label class="radio-label"><input type="radio" name="experience" value="gte_24_months"><span>&ge;24 months</span></label>
+            </div>
+            <div class="field-error" id="err-experience">Please select your experience level</div>
+        </div>
+
+        <div class="field">
+            <label>Total time available to contract over 3 weeks <span class="req">*</span></label>
+            <div class="field-hint">Starting 19th March to 9th April</div>
+            <div class="radio-group">
+                <label class="radio-label"><input type="radio" name="commitment" value="lte_5_hours" required><span>&le;5 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="5_10_hours"><span>5&ndash;10 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="10_15_hours"><span>10&ndash;15 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="15_20_hours"><span>15&ndash;20 hours</span></label>
+                <label class="radio-label"><input type="radio" name="commitment" value="gte_20_hours"><span>&ge;20 hours</span></label>
+            </div>
+            <div class="field-error" id="err-commitment">Please select your availability</div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div class="field">
+            <label>Permission to work in the US / UK <span class="req">*</span></label>
+            <div class="field-hint">Select all that apply (at least one required)</div>
+            <div class="checkbox-group">
+                <label class="checkbox-label"><input type="checkbox" id="work-us" value="us"><span>Permission to work in the US</span></label>
+                <label class="checkbox-label"><input type="checkbox" id="work-uk" value="uk"><span>Permission to work in the UK</span></label>
+            </div>
+            <div class="field-error" id="err-work">Please select at least one</div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div class="field">
+            <div class="field-label">Areas of AI safety where you feel you are a strong judge <span class="req">*</span></div>
+            <div class="field-hint">Rate your familiarity with each area. You can type in your own area below.</div>
+            <table class="areas-table" id="areas-table">
+                <thead>
+                    <tr>
+                        <th>Area</th>
+                        <th>Weak<span class="th-hint">Seen a few tweets</span></th>
+                        <th>Medium<span class="th-hint">Well-versed, read up on frontier</span></th>
+                        <th>Strong<span class="th-hint">Published paper/blog post + aware of frontier</span></th>
+                        <th>Very Strong<span class="th-hint">Multiple papers / could mentor projects</span></th>
+                    </tr>
+                </thead>
+                <tbody id="areas-tbody">
+                </tbody>
+            </table>
+            <button type="button" class="add-area-btn" id="add-area-btn">+ Add custom area</button>
+            <div class="field-error" id="err-areas">Please rate all broad areas</div>
+        </div>
+
+        <hr class="section-divider">
+
+        <div class="field">
+            <label for="reg-scholar">Google Scholar <span class="optional">(optional)</span></label>
+            <input type="url" id="reg-scholar" placeholder="https://scholar.google.com/citations?user=..." autocomplete="url">
+        </div>
+        <div class="field">
+            <label for="reg-linkedin">LinkedIn <span class="optional">(optional)</span></label>
+            <input type="url" id="reg-linkedin" placeholder="https://linkedin.com/in/..." autocomplete="url">
+        </div>
+
+        <div class="field">
+            <label>CV <span class="req">*</span></label>
+            <div class="field-hint">Upload your CV (PDF, DOC, or DOCX). Doesn't need to be up-to-date.</div>
+            <div class="file-upload-area">
+                <div class="file-input-wrapper">
+                    <input type="file" id="reg-cv" accept=".pdf,.doc,.docx">
+                </div>
+                <div class="upload-progress" id="upload-progress">
+                    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+                    <div class="progress-text" id="progress-text">Uploading...</div>
+                </div>
+            </div>
+            <div class="field-error" id="err-cv">Please upload your CV</div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submit-btn">Submit registration &amp; continue to eval &rarr;</button>
+        <div class="submit-status" id="submit-status"></div>
+    </form>
+</div>
+
+<script>
+const EVAL_ID = '20260323_eval_P1';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+// If already registered, go straight to eval
+const existing = localStorage.getItem(REG_KEY);
+if (existing) {
+    window.location.href = 'eval/';
+}
+
+// ---- Firebase init ----
+let _fb = null;
+let _storage = null;
+let _db = null;
+function initFirebase() {
+    if (_fb) return;
+    if (!FIREBASE_CONFIG || !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured');
+        return;
+    }
+    try {
+        _fb = firebase.initializeApp(FIREBASE_CONFIG);
+        _storage = firebase.storage();
+        _db = firebase.firestore();
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+    }
+}
+initFirebase();
+
+// ---- Areas grid ----
+// Broad areas first (alphabetical), then a gap, then narrow areas (alphabetical)
+const BROAD_AREAS = [
+    { name: 'Adversarial Robustness and AI Control', tooltip: 'Creating methods to ensure advanced AI systems remain safe and harmless in unfamiliar or adversarial scenarios.' },
+    { name: 'Model Organisms', tooltip: 'Creating model organisms of misalignment to improve our empirical understanding of how alignment failures might arise.' },
+    { name: 'Scalable Oversight', tooltip: 'Developing techniques to keep highly capable models helpful and honest, even as they surpass human-level intelligence in various domains.' },
+];
+const NARROW_AREAS = [
+    'Agentic Safety',
+    'Alignment Auditing Agents',
+    'Alignment Training Techniques',
+    'Automated Alignment Research',
+    'CoT Monitorability / Faithfulness',
+    'Data Poisoning',
+    'Emergent Misalignment',
+    'Eval Awareness / Sandbagging',
+    'Knowledge Unlearning / Capability Control',
+    'Prompt Injection Threats',
+    'Red-teaming / Production Classifiers',
+];
+let customAreaCount = 0;
+
+function areaKey(name) {
+    return name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function buildAreaRow(name, isCustom, tooltip) {
+    const key = isCustom ? 'custom_' + (customAreaCount++) : areaKey(name);
+    const tr = document.createElement('tr');
+    tr.dataset.areaKey = key;
+    tr.dataset.areaName = name;
+    tr.dataset.isCustom = isCustom ? '1' : '0';
+
+    const tdName = document.createElement('td');
+    if (isCustom) {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.className = 'custom-area-name';
+        inp.placeholder = 'Area name...';
+        inp.required = true;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'remove-area-btn';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.title = 'Remove this area';
+        removeBtn.addEventListener('click', () => tr.remove());
+        const wrapper = document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.gap = '4px';
+        wrapper.appendChild(inp);
+        wrapper.appendChild(removeBtn);
+        tdName.appendChild(wrapper);
+    } else {
+        if (tooltip) {
+            const wrap = document.createElement('span');
+            wrap.className = 'area-name-wrap';
+            const label = document.createTextNode(name);
+            wrap.appendChild(label);
+            const tip = document.createElement('span');
+            tip.className = 'area-tip';
+            tip.textContent = '?';
+            const tipText = document.createElement('span');
+            tipText.className = 'area-tip-text';
+            tipText.textContent = tooltip;
+            tip.appendChild(tipText);
+            wrap.appendChild(tip);
+            tdName.appendChild(wrap);
+        } else {
+            tdName.textContent = name;
+        }
+    }
+    tr.appendChild(tdName);
+
+    const levels = ['weak', 'medium', 'strong', 'very_strong'];
+    levels.forEach(level => {
+        const td = document.createElement('td');
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'area_' + key;
+        radio.value = level;
+        td.appendChild(radio);
+        tr.appendChild(td);
+    });
+    return tr;
+}
+
+function buildSeparatorRow(label) {
+    const tr = document.createElement('tr');
+    tr.className = 'area-separator';
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    if (label) {
+        td.style.paddingTop = '14px';
+        td.style.paddingBottom = '6px';
+        td.style.borderBottom = 'none';
+        td.style.fontSize = '13px';
+        td.style.color = '#666';
+        td.style.fontStyle = 'italic';
+        td.textContent = label;
+    } else {
+        td.style.height = '12px';
+        td.style.borderBottom = 'none';
+    }
+    tr.appendChild(td);
+    return tr;
+}
+
+function initAreasGrid() {
+    const tbody = document.getElementById('areas-tbody');
+    BROAD_AREAS.forEach(area => {
+        const row = buildAreaRow(area.name, false, area.tooltip);
+        row.dataset.broad = '1';
+        tbody.appendChild(row);
+    });
+    tbody.appendChild(buildSeparatorRow('Optional (if you have strong / very strong, please mention)'));
+    NARROW_AREAS.forEach(name => {
+        tbody.appendChild(buildAreaRow(name, false));
+    });
+}
+
+document.getElementById('add-area-btn').addEventListener('click', () => {
+    const tbody = document.getElementById('areas-tbody');
+    tbody.appendChild(buildAreaRow('', true));
+    // Focus the new text input
+    const inputs = tbody.querySelectorAll('.custom-area-name');
+    inputs[inputs.length - 1].focus();
+});
+
+initAreasGrid();
+
+// ---- CV upload ----
+async function uploadCV(file, email) {
+    if (!_storage) {
+        console.warn('Firebase Storage not configured — skipping upload');
+        return { path: null, filename: file.name };
+    }
+
+    const hash = hashStr(email);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = 'evaluations/' + EVAL_ID + '/cvs/' + hash + '_' + safeName;
+    const ref = _storage.ref(path);
+
+    const progressEl = document.getElementById('upload-progress');
+    const fillEl = document.getElementById('progress-fill');
+    const textEl = document.getElementById('progress-text');
+    progressEl.style.display = 'block';
+
+    return new Promise((resolve, reject) => {
+        const task = ref.put(file);
+        task.on('state_changed',
+            (snapshot) => {
+                const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+                fillEl.style.width = pct + '%';
+                textEl.textContent = 'Uploading... ' + pct + '%';
+            },
+            (error) => {
+                textEl.textContent = 'Upload failed: ' + error.message;
+                textEl.style.color = 'var(--error)';
+                reject(error);
+            },
+            () => {
+                fillEl.style.width = '100%';
+                textEl.textContent = 'Uploaded successfully';
+                textEl.style.color = 'var(--success)';
+                resolve({ path: path, filename: file.name });
+            }
+        );
+    });
+}
+
+function hashStr(s) {
+    let hash = 5381;
+    for (let i = 0; i < s.length; i++) {
+        hash = ((hash << 5) + hash) + s.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+// ---- Validation ----
+function clearErrors() {
+    document.querySelectorAll('.field.has-error').forEach(el => el.classList.remove('has-error'));
+}
+
+function showError(id) {
+    const errEl = document.getElementById(id);
+    if (errEl) errEl.closest('.field').classList.add('has-error');
+}
+
+function validateForm() {
+    clearErrors();
+    let valid = true;
+
+    if (!document.getElementById('reg-name').value.trim()) {
+        showError('err-name'); valid = false;
+    }
+    if (!document.getElementById('reg-email').value.trim()) {
+        showError('err-email'); valid = false;
+    }
+    if (!document.getElementById('reg-org').value.trim()) {
+        showError('err-org'); valid = false;
+    }
+    if (!document.querySelector('input[name="experience"]:checked')) {
+        showError('err-experience'); valid = false;
+    }
+    if (!document.querySelector('input[name="commitment"]:checked')) {
+        showError('err-commitment'); valid = false;
+    }
+
+    const workUS = document.getElementById('work-us').checked;
+    const workUK = document.getElementById('work-uk').checked;
+    if (!workUS && !workUK) {
+        showError('err-work'); valid = false;
+    }
+
+    // Validate all area rows have a selection
+    const rows = document.querySelectorAll('#areas-tbody tr');
+    let allBroadRated = true;
+    rows.forEach(row => {
+        if (row.classList.contains('area-separator')) return;
+        const checked = row.querySelector('input[type="radio"]:checked');
+        // Only broad areas are required
+        if (row.dataset.broad === '1' && !checked) allBroadRated = false;
+        // For custom areas, check name is filled if a rating was selected
+        if (row.dataset.isCustom === '1' && checked) {
+            const nameInput = row.querySelector('.custom-area-name');
+            if (!nameInput.value.trim()) allBroadRated = false;
+        }
+    });
+    if (!allBroadRated) {
+        showError('err-areas'); valid = false;
+    }
+
+    if (!document.getElementById('reg-cv').files.length) {
+        showError('err-cv'); valid = false;
+    }
+
+    return valid;
+}
+
+// ---- Submit ----
+document.getElementById('registration-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    if (!validateForm()) return;
+
+    const submitBtn = document.getElementById('submit-btn');
+    const statusEl = document.getElementById('submit-status');
+    submitBtn.disabled = true;
+    statusEl.textContent = '';
+
+    // Collect areas first (fast)
+    const areas = {};
+    document.querySelectorAll('#areas-tbody tr').forEach(row => {
+        let areaName;
+        if (row.dataset.isCustom === '1') {
+            areaName = row.querySelector('.custom-area-name').value.trim();
+        } else {
+            areaName = row.dataset.areaName || '';
+        }
+        const checked = row.querySelector('input[type="radio"]:checked');
+        if (areaName && checked) {
+            areas[areaKey(areaName)] = checked.value;
+        }
+    });
+
+    const email = document.getElementById('reg-email').value.trim();
+
+    // Upload CV (can be slow)
+    const cvFile = document.getElementById('reg-cv').files[0];
+    let cvResult = { path: null, filename: null };
+    try {
+        submitBtn.textContent = 'Uploading CV...';
+        cvResult = await uploadCV(cvFile, email);
+    } catch(err) {
+        statusEl.innerHTML = '<span style="color:var(--error)">CV upload failed. Please try again.</span>';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit registration & continue to eval \u2192';
+        return;
+    }
+
+    submitBtn.textContent = 'Saving registration...';
+
+    try {
+
+        const reg = {
+            name: document.getElementById('reg-name').value.trim(),
+            email: email,
+            organisation: document.getElementById('reg-org').value.trim(),
+            experience: document.querySelector('input[name="experience"]:checked').value,
+            commitment: document.querySelector('input[name="commitment"]:checked').value,
+            can_work_us: document.getElementById('work-us').checked,
+            can_work_uk: document.getElementById('work-uk').checked,
+            areas: areas,
+            google_scholar: document.getElementById('reg-scholar').value.trim() || null,
+            linkedin: document.getElementById('reg-linkedin').value.trim() || null,
+            cv_path: cvResult.path,
+            cv_filename: cvResult.filename,
+            registered_at: new Date().toISOString(),
+        };
+
+        // Save to localStorage
+        localStorage.setItem(REG_KEY, JSON.stringify(reg));
+
+        // Submit to Firestore
+        if (_db) {
+            try {
+                await _db.collection('evaluations').doc(EVAL_ID)
+                    .collection('registrations').add({
+                        ...reg,
+                        eval_id: EVAL_ID,
+                        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+            } catch(err) {
+                console.error('Firestore registration save failed:', err);
+                // Non-blocking — still continue to eval
+            }
+        }
+
+        window.location.href = 'eval/';
+    } catch(err) {
+        statusEl.innerHTML = '<span style="color:var(--error)">Something went wrong: ' + err.message + '</span>';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit registration & continue to eval \u2192';
+    }
+});
+</script>
+</body>
+</html>
