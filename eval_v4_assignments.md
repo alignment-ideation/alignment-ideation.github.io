@@ -1,0 +1,47 @@
+# Eval v4 — 9-Partition Assignments (Improved Ideas)
+
+- [P1: Red teaming / prompt injection / agentic](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P1/)
+  - The Vy Hong
+  - Yong Zheng-Xin
+  - Hunar Batra
+  - Jiawei Li
+- [P2: Eval awareness / model organisms / oversight](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P2/)
+  - Michael Winer
+  - Tim Hua
+  - Sebastian Prasanna
+  - Joachim Schaeffer
+- [P3: Eval awareness / automated alignment](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P3/)
+  - Michael Winer
+  - Tim Hua
+  - Sebastian Prasanna
+  - Joachim Schaeffer
+- [P4: Data poisoning / alignment training](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P4/)
+  - Sebastian Prasanna
+  - Victor Gillioz
+  - Hunar Batra
+  - Jiawei Li
+- [P5: CoT / emergent misalignment](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P5/)
+  - Victor Gillioz
+  - Yong Zheng-Xin
+  - Hunar Batra
+  - Jiawei Li
+- [P6: Agentic / emergent misalignment](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P6/)
+  - Zora Che
+  - Joe Kwon
+  - Victor Gillioz
+  - Yong Zheng-Xin
+- [P7: Red teaming + alignment training mix](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P7/)
+  - The Vy Hong
+  - Steven Basart
+  - Joe Kwon
+  - Joachim Schaeffer
+- [P8: Eval awareness + oversight mix](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P8/)
+  - Michael Winer
+  - Zora Che
+  - Steven Basart
+  - Tim Hua
+- [P9: CoT/EM + agentic mix](https://alignment-ideation.github.io/8_human_ranking_ui_prod/20260324_eval_P9/)
+  - The Vy Hong
+  - Zora Che
+  - Steven Basart
+  - Joe Kwon
