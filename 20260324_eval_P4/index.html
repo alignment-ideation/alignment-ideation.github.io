@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alignment Research Evaluation</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #A8523A;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --border: #E0DDD4;
+    --error: #c0392b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+}
+.card {
+    background: var(--surface);
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    padding: 40px;
+    max-width: 500px;
+    width: 100%;
+}
+h1 {
+    color: var(--primary);
+    font-size: 24px;
+    margin-bottom: 6px;
+}
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.5;
+}
+.field {
+    margin-bottom: 22px;
+}
+.field > label:first-child {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 15px;
+}
+.field input[type="text"],
+.field input[type="email"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: var(--surface);
+    transition: border-color 0.2s;
+}
+.field input:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+.req { color: var(--primary); }
+.field-error {
+    color: var(--error);
+    font-size: 13px;
+    margin-top: 4px;
+    display: none;
+}
+.field.has-error .field-error {
+    display: block;
+}
+.field.has-error input[type="text"],
+.field.has-error input[type="email"] {
+    border-color: var(--error);
+}
+.submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 8px;
+}
+.submit-btn:hover { background: var(--primary-hover); }
+.submit-btn:disabled {
+    background: var(--border);
+    cursor: not-allowed;
+}
+.submit-status {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+<div class="card">
+    <h1>Alignment Research Evaluation</h1>
+    <p class="subtitle">Please enter your details to begin the evaluation.</p>
+    <form id="registration-form">
+        <div class="field">
+            <label for="reg-name">Name <span class="req">*</span></label>
+            <input type="text" id="reg-name" required autocomplete="name">
+            <div class="field-error" id="err-name">Please enter your name</div>
+        </div>
+        <div class="field">
+            <label for="reg-email">Email <span class="req">*</span></label>
+            <input type="email" id="reg-email" required autocomplete="email">
+            <div class="field-error" id="err-email">Please enter a valid email</div>
+        </div>
+        <button type="submit" class="submit-btn" id="submit-btn">Continue to evaluation &rarr;</button>
+        <div class="submit-status" id="submit-status"></div>
+    </form>
+</div>
+
+<script>
+const EVAL_ID = '20260324_eval_P4';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+// If already registered, go straight to eval
+const existing = localStorage.getItem(REG_KEY);
+if (existing) {
+    window.location.href = 'eval/';
+}
+
+// ---- Firebase init ----
+let _db = null;
+function initFirebase() {
+    if (_db) return;
+    if (!FIREBASE_CONFIG || !FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured');
+        return;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _db = firebase.firestore();
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+    }
+}
+initFirebase();
+
+// ---- Validation ----
+function clearErrors() {
+    document.querySelectorAll('.field.has-error').forEach(el => el.classList.remove('has-error'));
+}
+
+function showError(id) {
+    const errEl = document.getElementById(id);
+    if (errEl) errEl.closest('.field').classList.add('has-error');
+}
+
+function validateForm() {
+    clearErrors();
+    let valid = true;
+    if (!document.getElementById('reg-name').value.trim()) {
+        showError('err-name'); valid = false;
+    }
+    if (!document.getElementById('reg-email').value.trim()) {
+        showError('err-email'); valid = false;
+    }
+    return valid;
+}
+
+// ---- Submit ----
+document.getElementById('registration-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    const submitBtn = document.getElementById('submit-btn');
+    const statusEl = document.getElementById('submit-status');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+    statusEl.textContent = '';
+
+    try {
+        const reg = {
+            name: document.getElementById('reg-name').value.trim(),
+            email: document.getElementById('reg-email').value.trim(),
+            registered_at: new Date().toISOString(),
+        };
+
+        localStorage.setItem(REG_KEY, JSON.stringify(reg));
+
+        if (_db) {
+            try {
+                await _db.collection('evaluations').doc(EVAL_ID)
+                    .collection('registrations').add({
+                        ...reg,
+                        eval_id: EVAL_ID,
+                        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+                    });
+            } catch(err) {
+                console.error('Firestore registration save failed:', err);
+            }
+        }
+
+        window.location.href = 'eval/';
+    } catch(err) {
+        statusEl.innerHTML = '<span style="color:var(--error)">Something went wrong: ' + err.message + '</span>';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Continue to evaluation \u2192';
+    }
+});
+</script>
+</body>
+</html>
