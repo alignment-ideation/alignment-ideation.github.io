@@ -603,12 +603,16 @@ function startEval() {
 /* Decide which of the three screens to show first.
  * In prod (publish_pairwise_to_prod injects `const EVAL_ID = ...`) the standalone
  * registration_page.html already collected the rater info before redirecting here,
- * so skip our in-page registration to avoid the user seeing two "Before we start"
- * screens back-to-back. */
+ * so we skip both the in-page registration AND the onboarding screen and go
+ * straight to pair 1. Instructions remain available via the ? Help button. */
 function initFlow() {
   const inProd = (typeof EVAL_ID !== 'undefined');
-  const reg = inProd ? null : getRegistration();
-  if (!inProd && !reg) {
+  if (inProd) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    return;
+  }
+  const reg = getRegistration();
+  if (!reg) {
     document.getElementById('registration-screen').classList.remove('hidden');
     setTimeout(() => document.getElementById('reg-name').focus(), 50);
   } else if (!hasSeenOnboarding()) {
