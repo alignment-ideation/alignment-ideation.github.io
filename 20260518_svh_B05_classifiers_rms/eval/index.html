@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairwise Idea Preference — Classifiers, RMs, robust oversight signals</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #9C4A2D;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --muted: #999999;
+    --border: #E0DDD4;
+    --row-hover: #FAFAF7;
+    --accent-soft: #FDF2EC;
+    --gold: #C99C2C;
+    --gold-dark: #92400E;
+    --gold-bg: #FEF3C7;
+    --gold-soft: #FEF7E0;
+    --success: #2D8F6F;
+    --success-hover: #226E55;
+    --success-bg: #D1FAE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+}
+.app {
+    display: flex; flex-direction: column;
+    height: 100vh; max-width: 1600px; margin: 0 auto;
+    padding: 10px 16px 10px 16px;
+    gap: 10px;
+}
+.hidden { display: none !important; }
+
+/* Compact topbar */
+.topbar {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 10px;
+}
+.topbar-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.topbar-sub { font-size: 0.78rem; opacity: 0.92; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.topbar-progress {
+    width: 240px; height: 6px; background: rgba(255,255,255,0.25);
+    border-radius: 10px; overflow: hidden;
+}
+.topbar-progress-fill { background: white; height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+.topbar-help {
+    background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+}
+.topbar-help:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.5); }
+
+/* Registration screen — collected before onboarding */
+.registration-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 32px;
+}
+.registration-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 30px 36px; max-width: 480px; width: 100%;
+}
+.registration-card h2 { color: var(--primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 18px; }
+.registration-card .intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 20px; line-height: 1.55; }
+.reg-field { margin-bottom: 14px; }
+.reg-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 5px; }
+.reg-field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.95rem;
+}
+.reg-field input:focus { outline: none; border-color: var(--primary); }
+.reg-error { color: var(--primary); font-size: 0.82rem; margin-top: 4px; min-height: 1em; }
+.reg-foot { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.reg-submit-wrap { margin-top: 20px; text-align: center; }
+.reg-submit-btn {
+    background: var(--primary); color: white; border: 1px solid var(--primary);
+    padding: 11px 28px; border-radius: 8px;
+    font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.reg-submit-btn:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.reg-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Onboarding screen (scrolls) */
+.onboarding-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center;
+}
+.onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 820px; width: 100%;
+    margin: 4px auto 20px auto;
+    height: max-content;
+}
+.onboarding-card h2 {
+    color: var(--primary); font-size: 1.3rem; font-weight: 700;
+    margin-bottom: 18px;
+}
+.onboarding-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.onboarding-section:first-of-type { border-top: none; padding-top: 4px; }
+.onboarding-section .sec-title {
+    font-weight: 700; color: var(--text);
+    font-size: 1rem; margin-bottom: 4px;
+}
+.onboarding-section .sec-body { color: var(--text); font-size: 0.94rem; line-height: 1.7; }
+.onboarding-section .sec-body p { margin: 6px 0; }
+.onboarding-section .sec-body ul, .onboarding-section .sec-body ol { margin: 6px 0 6px 22px; }
+.onboarding-section .sec-body li { margin: 3px 0; }
+.onboarding-section .sec-body code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
+.onboarding-section .sec-body a { color: var(--primary); }
+
+/* Eval screen: flex column filling remaining viewport. */
+.eval-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Idea grid: fills remaining vertical space; each card scrolls internally. */
+.idea-grid {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.idea-card {
+    background: var(--row-hover);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.idea-card .card-head {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.5);
+}
+.idea-card .idea-title { font-size: 0.98rem; font-weight: 700; color: var(--text); flex: 1; min-width: 0; }
+.idea-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 10px 16px 14px 16px;
+    font-size: 0.88rem; line-height: 1.6; color: var(--text);
+}
+.idea-body p { margin: 5px 0; }
+.idea-body ul, .idea-body ol { margin: 5px 0 5px 20px; }
+.idea-body li { margin: 2px 0; }
+.idea-body strong { color: var(--text); }
+.idea-body h1, .idea-body h2, .idea-body h3, .idea-body h4 {
+    font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 10px 0 4px 0;
+}
+.idea-body h1:first-child, .idea-body h2:first-child, .idea-body h3:first-child, .idea-body h4:first-child { margin-top: 0; }
+
+.idea-badge {
+    display: inline-block;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 1px;
+    padding: 2px 9px; border-radius: 4px;
+    background: var(--success); color: white;
+}
+
+/* Preference button row: A is better / Both equal / B is better */
+.pref-row {
+    flex: none;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px;
+}
+.pref-btn {
+    background: var(--surface); color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pref-btn:hover { border-color: var(--success); color: var(--success); }
+.pref-btn.selected {
+    background: var(--success); border-color: var(--success); color: white;
+    box-shadow: 0 2px 8px rgba(45, 143, 111, 0.25);
+}
+.pref-btn.selected:hover { background: var(--success-hover); border-color: var(--success-hover); color: white; }
+
+/* Tie button uses a neutral grey instead of green to avoid implying preference. */
+.pref-btn[data-choice="tie"]:hover { border-color: #6B7280; color: #6B7280; }
+.pref-btn[data-choice="tie"].selected {
+    background: #6B7280; border-color: #6B7280; color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.25);
+}
+.pref-btn[data-choice="tie"].selected:hover { background: #4B5563; border-color: #4B5563; color: white; }
+.pref-btn .kbd-mini {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-secondary);
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+.pref-btn.selected .kbd-mini { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: white; }
+
+/* Inline notes textarea, single row in the bottom band */
+.notes-row {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px;
+}
+.notes-row label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; flex: none; }
+.notes-row textarea {
+    flex: 1; min-height: 28px; max-height: 70px; resize: vertical;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+}
+.notes-row textarea:focus { outline: none; border-color: var(--primary); }
+
+/* Bottom nav: prev / pager dots / submit / next */
+.nav-bar {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px;
+}
+.pager-dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pager-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 0.74rem; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+}
+.pager-dot:hover { border-color: var(--primary); color: var(--primary); }
+.pager-dot.current { background: var(--primary); border-color: var(--primary); color: white; }
+.pager-dot.answered { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pager-dot.current.answered { background: var(--success); border-color: var(--success); color: white; }
+.nav-side { display: flex; align-items: center; gap: 6px; }
+
+.btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+.btn.btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+.btn.btn-primary:disabled { background: var(--primary); border-color: var(--primary); color: white; opacity: 0.4; }
+
+.kbd { display: inline-block; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; }
+
+/* Summary screen — review picks before submitting */
+.summary-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.summary-header {
+    flex: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+}
+.summary-header h2 { color: var(--primary); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.summary-header .sub { color: var(--text-secondary); font-size: 0.88rem; }
+.summary-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.summary-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+    display: grid; grid-template-columns: 60px 1fr 160px; gap: 12px; align-items: center;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+}
+.summary-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(193, 95, 60, 0.06); }
+.summary-row.unanswered { border-color: #E0B4A8; background: #FBEEE8; }
+.summary-row .pair-no { font-size: 0.78rem; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; text-transform: uppercase; }
+.summary-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.summary-title {
+    display: flex; gap: 8px; align-items: baseline; min-width: 0;
+    font-size: 0.88rem; color: var(--text-secondary);
+}
+.summary-title .idea-badge { flex: none; }
+.summary-title .ttext {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-title.winner { color: var(--text); font-weight: 600; }
+.summary-title.winner .ttext { color: var(--text); }
+.summary-pick {
+    text-align: center; font-size: 0.85rem; font-weight: 700;
+    padding: 6px 10px; border-radius: 6px;
+    background: var(--success); color: white;
+    white-space: nowrap;
+}
+.summary-pick.tie { background: #6B7280; }
+.summary-pick.none { background: #F4F3EE; color: #B25C46; border: 1px dashed #D49A8B; font-weight: 600; }
+
+/* Onboarding screen start button */
+.onboarding-start-wrap { margin-top: 24px; text-align: center; }
+.onboarding-start-btn {
+    background: var(--primary); color: white;
+    border: 1px solid var(--primary);
+    padding: 12px 32px; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.onboarding-start-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* Help overlay (reused from v5 style) */
+.help-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.help-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 780px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    position: relative;
+    font-size: 0.95rem; line-height: 1.7;
+}
+.help-modal h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: 16px; }
+.help-modal .help-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.help-modal .help-section:first-of-type { border-top: none; padding-top: 4px; }
+.help-modal .help-section .h-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.help-modal .help-section a { color: var(--primary); }
+.help-modal .help-section code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.help-modal img { max-width: 100%; height: auto; }
+.help-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    color: var(--text-secondary); padding: 4px 10px;
+    line-height: 1;
+}
+.help-close:hover { color: var(--text); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D5D2C9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ---- Prod: Submission Status ---- */
+#submission-status {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Classifiers, RMs, robust oversight signals</div>
+      <div class="topbar-sub" id="topbar-sub">4 pairs · 0 winners picked</div>
+    </div>
+    <div class="topbar-progress"><div class="topbar-progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    <button class="topbar-help" onclick="showHelp()">? Help</button>
+  </div>
+
+  <div id="registration-screen" class="registration-screen hidden">
+    <div class="registration-card">
+      <h2>Before we start</h2>
+      <div class="reg-field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" type="text" autocomplete="name" oninput="onRegInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('reg-email').focus();}">
+      </div>
+      <div class="reg-field">
+        <label for="reg-email">Email</label>
+        <input id="reg-email" type="email" autocomplete="email" oninput="onRegInput()" onkeydown="if(event.key==='Enter')submitRegistration()">
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+      <div class="reg-submit-wrap">
+        <button class="reg-submit-btn" id="reg-submit-btn" disabled onclick="submitRegistration()">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card" id="onboarding-card"></div>
+  </div>
+
+  <div id="eval-screen" class="eval-screen hidden">
+    <div class="idea-grid" id="idea-grid"></div>
+
+    <div class="pref-row" id="pref-row">
+      <button class="pref-btn" data-choice="A" onclick="pick('A')">A is better <span class="kbd-mini">A</span></button>
+      <button class="pref-btn" data-choice="tie" onclick="pick('tie')">Both are equal <span class="kbd-mini">E</span></button>
+      <button class="pref-btn" data-choice="B" onclick="pick('B')">B is better <span class="kbd-mini">B</span></button>
+    </div>
+
+    <div class="notes-row">
+      <label for="notes-current">Optional — justify your decision</label>
+      <textarea id="notes-current" placeholder="A short note helps a lot when we read these later." oninput="onNotesInput(this.value)"></textarea>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" id="prev-btn" onclick="navPrev()">&larr; Prev</button>
+        <button class="btn" id="next-btn" onclick="navNext()">Next &rarr;</button>
+      </div>
+      <div class="pager-dots" id="pager"></div>
+      <div class="nav-side">
+        <span style="font-size:0.75rem; color: var(--text-secondary);"><span class="kbd">A</span>/<span class="kbd">E</span>/<span class="kbd">B</span> pick · <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+        <button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0 ranked)</button>
+            <div id="submission-status" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-screen" class="summary-screen hidden">
+    <div class="summary-header">
+      <h2>Review your picks</h2>
+      <div class="sub" id="summary-sub"></div>
+    </div>
+    <div class="summary-list" id="summary-list"></div>
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" onclick="exitSummary()">&larr; Back to pairs</button>
+      </div>
+      <div style="font-size:0.78rem; color: var(--text-secondary);">Click a row to revise that pair.</div>
+      <div class="nav-side">
+        <button class="btn btn-primary" id="summary-submit-btn" disabled onclick="downloadResults()">Submit (0 / 0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help-overlay" class="help-overlay hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="help-modal">
+    <button class="help-close" onclick="hideHelp()" aria-label="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div id="help-content"></div>
+  </div>
+</div>
+<script>
+let STORAGE_KEY = 'rankings_prod_20260518_svh_B05_classifiers_rms_default';
+const EVAL_ID = '20260518_svh_B05_classifiers_rms';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const EMAILJS_CONFIG = {"service_id": "service_sdkgwjx", "template_id": "template_pztjzon", "public_key": "USnRousNcwC1uAee-"};
+const BATCH_ID = "B05_classifiers_rms";
+const BATCH_TITLE = "Classifiers, RMs, robust oversight signals";
+const ONBOARDING_SECTIONS = [{"title": "Before You Begin", "body": "You are comparing pairs of AI safety research ideas. In each pair, two ideas — labelled **A** and **B** — were written in response to the same research prompt. You don't know which is which: one is from a human researcher and one is AI-generated. Your job is to pick the one you'd rather see pursued in an [Anthropic Fellows Program](https://alignment.anthropic.com/2025/anthropic-fellows-program-2026/) (AFP) project.\n\nFacts about the Anthropic Fellows Program (for context on what's pursuable):\n\n* 4 months\n* 2 fellows per project\n* $15k/month compute budget each\n* Unlimited access to the Claude API, but no access to internal tooling or data\n\nIf you are less familiar with the sort of empirical technical alignment research done by Anthropic's Fellows Program, skim [https://alignment.anthropic.com/](https://alignment.anthropic.com/) and come back."}, {"title": "Scope vs Quality", "body": "Ideas don't need to fit the 4-month window perfectly — scope can be adjusted afterwards. What matters is whether the underlying research taste is good: whether fleshing the idea out would uncover research questions and experiments worth pursuing, and ultimately make Transformative AI go well.\n\nThe info that conveys taste should already be present in the idea."}, {"title": "How to choose between A and B", "body": "A useful framework:\n\n1. Read the prompt and categorise what sub-area this is about (AI control, scalable oversight, alignment training, CoT monitorability, adversarial robustness, alignment auditing agents, …).\n2. Think briefly about what good work in that sub-area would look like — what matters, what's hard, what would actually move the needle.\n3. Compare A and B on two axes:\n    * **High-level taste**: problem framing, research questions, why-it-matters, deliverable. Does this idea aim at something that matters and would teach us something we don't already know?\n    * **Approach**: are the technical choices load-bearing and well-justified, or generic? Are the hard parts named? Does the approach actually deliver on the high-level pitch?\n4. Click the idea you'd rather see pursued. You can change your mind any time by clicking the other card."}, {"title": "Close calls", "body": "Some pairs will be genuinely hard to separate — that's fine. Pick whichever side you lean toward, even if barely. Don't agonise; the aggregate of many small leans is informative."}, {"title": "Individual idea quality vs answering the prompt", "body": "Both ideas in each pair address the prompt sufficiently well by our standards — focus on the *content* of the ideas rather than how well they answer the question."}, {"title": "Using the interface", "body": "One pair per page. Click the card you want to crown — it turns gold. Use the **Prev** / **Next** buttons or arrow keys to move between pairs; press **A** or **B** to pick from the keyboard. The **Submit** button at the bottom unlocks once every pair has a winner."}];
+const QUESTIONS = [{"prompt_id": 31, "proposal_name": "synthetic_data_for_constitutional_classifiers", "prompt_text": "Detecting CBRN misuse can draw on decades of controlled-substance literature, but novel agentic threats — research sabotage, rogue deployments, covert capability use — have almost no naturally occurring examples. What research could build reliable detection for threat categories where examples barely exist?", "areas_of_ai_safety": ["AI Control", "ML Security"], "afp_score": 3, "a_kind": "human", "a_title": "Synthetic data generation for multi-domain safety classifiers", "a_text": "## What We'd Build\n\nWe'd build a fully synthetic data-generation pipeline that produces training data for finetuned safety classifiers across many threat domains. The pipeline is modular -- adapting it to a new domain means writing a new natural-language threat specification, not rewriting the generation code. This would let us rapidly produce classifiers for any emerging threat category without bespoke data-collection effort per domain.\n\n## Motivation\n\nFinetuned classifiers are the strongest known safety intervention for frontier models. Recent work on training classifiers from natural-language safety specifications demonstrated this for biological threats, and the approach generalizes in principle. But the practical bottleneck isn't classifier architecture or training -- it's generating good training data for each new domain. Every new target area requires its own data-collection effort, so coverage expands slowly. We can't shortcut this by prompting a model with a threat description at inference time: prompted classifiers aren't resistant to jailbreaks, are more expensive to serve, and aren't easier to iterate on than their finetuned counterparts. If the data-generation bottleneck were removed, a new threat could be addressed by writing a specification, generating a training set, and distributing the resulting classifier across frontier labs within days rather than months.\n\n## Approach\n\n- **Threat specification via constitutions.** Each domain is defined by a natural-language document describing the threat -- what counts as research sabotage, weight exfiltration, or prompt injection. This specification is the only input that changes between domains.\n- **Synthetic example generation.** An LLM generates both positive and negative training examples from the specification alone, requiring no human-labeled data. The core assumption is that a sufficiently detailed threat description lets the model produce realistic examples without domain-expert curation.\n- **Coverage across five domain categories.** Targets include harmful computer-use, prompt injection, trust-and-safety harms like copyright infringement and child sexualization, agentic and control threats like research sabotage and rogue deployments, and CBRN threats.\n- **Classifier finetuning and distribution.** Generated datasets feed directly into finetuning classifiers or probes. The intended workflow is fast enough that a new training set can be shared across frontier labs as a coordinated defense when a threat emerges.\n- **Specification refinement.** Because the pipeline is fully synthetic and modular, specifications can be narrowed, broadened, or rewritten and data regenerated cheaply -- enabling rapid experimentation with granularity.\n\n## Open Questions\n\n1. *Does training on many narrow specifications generalize to broad monitoring?* If we finetune a classifier on N specified threat types, we don't yet know whether it transfers to held-out threats that weren't part of training. Testing this would reveal whether the pipeline produces classifiers that handle unforeseen threats or only those explicitly described during data generation.\n\n2. *Is a natural-language threat description sufficient for high-quality synthetic data across all domains?* Some targets -- especially CBRN or novel agentic threats -- may need expert-written seed examples or adversarial filtering to reach useful data quality. The pipeline hasn't validated that a constitution alone is enough everywhere.\n\n## Limitations\n\nThe strongest objection is that a generic pipeline may underperform domain-specific classifier development. For areas like agentic threats, bespoke data work tailored to specific failure modes could yield better classifiers than a one-size-fits-all approach -- and this trade-off hasn't been tested. Several target domains, including harmful computer-use, prompt injection, and trust-and-safety harms, don't directly reduce catastrophic risk, weakening the case that broad coverage is urgent. The pipeline itself may not require privileged internal capabilities, raising the question of whether it could be built externally or open-sourced rather than developed at a frontier lab.", "b_kind": "scaffold", "b_title": "Runtime sabotage detection for research agents", "b_text": "## What We'd Build\n\nA library of testable behavioral invariants -- properties that honest agentic behavior should satisfy -- paired with empirical measurements of how often sabotaging and benign models violate each one. The deliverable would be a ranked set of cheap runtime checks with their detection rates across several agentic task settings, ready to plug into existing scaffold monitoring.\n\n## Motivation\n\nCurrent approaches to detecting bad behavior in agentic systems mostly start from labeled examples of attacks and train classifiers against them. This works when you have good coverage of the threat space, but novel sabotage strategies produce no training data by definition. An alternative path is to define what good behavior looks like and flag deviations -- closer to property-based testing in software than to pattern matching. In agentic research settings, honest agents should exhibit certain regularities: stated plans should match implementations, performance shouldn't drop selectively on safety-relevant subtasks, and repeating an analysis under different conditions should yield consistent results. A sabotaging agent would need to violate at least some of these properties to have any effect. Prior sandbagging work found that weaker transcript-level monitors catch a modest fraction of sabotaged runs at practical false-positive rates; invariant checking would be complementary because it uses outcome-level signals rather than requiring familiarity with what sabotage transcripts look like.\n\n## Approach\n\n- **Define candidate invariants.** We'd start from specific testable properties -- plan-action alignment (does the model do what it says it will?), cross-run stability (does repeating the task yield similar quality?), relative performance consistency (does quality drop on safety-relevant tasks compared to capability-matched baselines?), and result-explanation coherence (does the model's interpretation of results match what they actually show?).\n- **Generate paired evaluation data.** We'd run both honest and prompted-to-sandbag models on ML research tasks from existing benchmarks, recording full trajectories and outcomes. Sandbagging elicitation would use both direct sabotage and weak-model imitation prompts, since prior work found these produce qualitatively different failure signatures.\n- **Score each invariant.** For each invariant, we'd measure violation rates across honest vs. sabotaging agents and compute ROC curves focused on the low false-positive regime, alongside wall-clock time and API cost per check, to build a Pareto frontier of cost vs. detection rate.\n- **Test adaptive evasion.** We'd give the sabotaging model explicit knowledge of which invariants are being checked and measure whether it can still degrade research quality without triggering violations. Cross-run stability in particular seems hard to game, since satisfying it while sabotaging requires producing consistently bad work, which limits damage.\n\n## Open Questions\n\n1. *Can sabotaging models satisfy all behavioral invariants while still meaningfully degrading output quality?* If every invariant-satisfying strategy also caps the achievable damage, invariants function as both detection and mitigation -- and understanding that tradeoff would shape whether to deploy them as alarms or as hard constraints.\n\n2. *Do invariant violations from prompted sabotage predict violations from other sabotage mechanisms?* We'd test invariants developed against prompted sandbagging on emergent-misalignment model organisms to see whether structural signatures transfer across different threat origins.\n\n## Limitations\n\nThe invariants we can define are limited by our imagination, and a sufficiently capable model might find strategies that satisfy all of them while sabotaging through channels we haven't anticipated. The most interesting invariants -- like plan-action consistency -- require parsing model reasoning, which introduces its own error rate and compute overhead. Cross-run stability also doubles or triples compute per task, and we don't yet know whether the detection benefit justifies that cost in high-throughput settings."}, {"prompt_id": 25, "proposal_name": "prompt_steerable_constitutional_summarizers_and_classifiers", "prompt_text": "What empirical approach could measure how quickly a safety classifier’s effectiveness degrades when facing harm categories and attack strategies absent from its training distribution — and could that degradation curve inform building classifiers that generalize better?", "areas_of_ai_safety": ["Scalable Oversight", "AI Control"], "afp_score": 3, "a_kind": "scaffold", "a_title": "Predicting safety classifier coverage on novel harm types", "a_text": "### Problem\n\nFrontier labs train safety classifiers on synthetic data covering specific harm domains -- dangerous chemistry, exploitation, weapons acquisition -- with format augmentations applied to each. When a novel harm type surfaces or an existing one shifts in presentation, teams discover gaps reactively through red-teaming or incident reports. There isn't an established way to predict, before deployment, how far a classifier's coverage extends beyond its training categories. This makes it hard to choose between architectures that might generalize differently, decide where data generation effort should go, or anticipate when retraining is needed. A classifier that degrades gracefully on unfamiliar harms buys time; one that degrades cliff-like silently fails in domains developers believed were covered.\n\n### Central Hypothesis\n\nClassifier degradation on novel harm categories follows a predictable curve shaped by semantic distance from training categories, and this curve differs across architectures. Linear probes on a policy model's residual stream should degrade more slowly than standalone fine-tuned classifiers, because probes inherit broader representations of harm rather than learning category-specific patterns.\n\n### Approach\n\n1. **Build a category testbed:** We'd use a constitution-based pipeline to generate matched harmful/benign pairs across several dozen narrowly defined harm categories, each with a range of attack-format augmentations applied as an independent axis. Categories would need to be specific enough that holding one out creates a meaningful gap -- \"cyanide synthesis\" rather than \"dangerous chemistry.\"\n2. **Train both architectures identically:** For each condition, we'd train a fine-tuned dedicated classifier and a linear probe on an open-weight policy model's residual stream, both seeing identical data so performance differences come from architectural choice alone. Held-one-out training across all categories would produce a distribution of degradation measurements per architecture.\n3. **Plot degradation against distance:** We'd embed each harm category using the policy model's own activations at the probing layer, compute distances between held-out and training categories, and fit degradation curves. The shape of these curves -- smooth versus cliff-like -- would indicate whether classifiers learn generalizable harm features or category-specific patterns.\n4. **Disentangle content from format novelty:** Independently holding out attack formats while keeping harm categories fixed, and vice versa, would reveal whether novel harms or novel delivery mechanisms drive degradation faster -- guiding whether augmentation effort should prioritize format diversity or category expansion.\n5. **Validate against organic data:** Wherever we can access real red-team attempts, we'd test whether synthetic-to-synthetic degradation curves predict actual miss rates. Even partial validation on a handful of categories would meaningfully increase confidence in the results.\n\n### Open Questions\n\n- The right distance metric is itself something we'd need to discover. Policy-model activations are a natural start, but the fine-tuned classifier may organize categories very differently in its own representation space, which would complicate cross-architecture comparison.\n- Whether synthetic data degradation predicts real-world degradation is the central external validity concern -- our curves might be accurate within the synthetic world but misleading about production.\n- We're assuming holding out one fine-grained category creates a meaningful gap. If remaining categories collectively cover the held-out one through proximity, degradation would look artificially small.\n\n### Deliverable and Significance\n\nThe project would produce empirical degradation curves for two classifier architectures across several dozen harm categories and multiple attack formats, along with a reusable testbed. Safety teams could use these to shift from reactive patching to predictive coverage assessment -- estimating how far protection extends before deployment. The content-versus-format disentanglement would give data generation teams concrete guidance on where to invest effort, and the cross-architecture comparison would inform whether representation-reuse designs carry a generalization advantage or whether the bottleneck is training signal regardless of architecture.", "b_kind": "human", "b_title": "Do jailbreak-resistant monitors generalize across prompt templates", "b_text": "### Problem\n\nLabs rely heavily on prompted classifiers and summarizers to detect both misuse and misalignment -- filtering real-world traffic, analyzing reinforcement learning data, powering clustering and analysis tools, and auditing autonomous agents. These prompted models are vulnerable to three distinct attack vectors: jailbreaks crafted by human adversaries, jailbreaks generated by other language models, and self-generated justifications from misaligned models rationalizing harmful actions. If these monitors can be fooled, the safety infrastructure built on them silently degrades -- whether the monitor is catching policy violations in chat traffic or flagging suspicious behavior from an AI agent.\n\n### Central Hypothesis\n\nTraining classifiers and summarizers with constitutional-classifier-style methods across multiple prompt templates simultaneously will produce jailbreak resistance that transfers to novel, unseen prompt templates at deployment. The core bet is that this resistance generalizes -- not just across input distributions, but across the steering prompts themselves.\n\n### Approach\n\n1. **Multi-template training data:** We construct training data spanning both classification and summarization tasks simultaneously -- for example, \"Is this dialog bio harm?\", \"Is this dialog cyber harm?\", and \"Summarize the ways this dialog relates to election interference\" -- each paired with appropriate labels or target summaries. This multi-task setup across classification and summarization is a deliberate departure from prior constitutional classifier work, which focused on refusal behavior.\n\n2. **Activation-efficient template ordering:** We place the dialog before the classification question in each template, allowing reuse of cached activations on transcript tokens when running multiple queries over the same conversation. Prior probing work suggests this reordering carries minimal accuracy cost, and it makes parallel evaluation across many categories practical.\n\n3. **Structured probing variant:** We also test a configuration where the system prompt is prefixed with a structured label mapping (e.g., \"bioweapons\" maps to \"A\", \"chem weapons\" to \"B\", \"no harm\" to \"C\"), enabling multi-category classification via a single forward pass rather than separate prompted queries for each category.\n\n4. **Generalization evaluation:** We evaluate on prompt templates not seen during training -- training on bio harm and cyber harm classification, then testing on chemical harm. The gap between trained-on and novel templates is the key measurement, tested under all three attack vectors: human jailbreaks, LLM-generated jailbreaks, and model self-justifications.\n\n5. **Adversarial summarization pipeline:** For summarization tasks where jailbreaks are present, we explore a critique-then-revise pipeline: a jailbreak classifier flags the attempt, we generate a revised summary acknowledging it, then fine-tune toward that revision. We think chain-of-thought traces during summarization should help particularly for subtler, harder-to-spot jailbreaks.\n\n### Open Questions\n\n- What should a successful summary look like when a jailbreak or AI self-justification is present -- should it explicitly call out the manipulation attempt, or simply not be deceived by it? This isn't just philosophical; it shapes both training targets and evaluation criteria.\n- Should we train on narrow domains (e.g., bio harm and malicious code) to cleanly measure generalization, or train broadly to demonstrate general-purpose transfer? There's a real tension between scientific clarity and the practical value of showing the approach works across many settings.\n- How different can deployment-time templates be from training templates before transfer breaks down, and does the answer differ for classification versus summarization?\n\n### Deliverable and Significance\n\nWe'd produce a prompt-steerable classifier and summarizer system with systematic measurements of how jailbreak resistance transfers across prompt templates -- covering both classification and summarization under adversarial conditions. The central finding directly informs whether labs can trust a single hardened model across their full range of safety monitoring tasks, from traffic filtering to agent auditing, or whether each new monitoring prompt demands its own adversarial training cycle."}, {"prompt_id": 13, "proposal_name": "diverse_rm_ensembles", "prompt_text": "If safety components across the stack — reward models, trusted monitors, evaluations — tend to fail in correlated ways because they share training data and distribution-shift blind spots, what research could produce safety signals whose failure modes are genuinely independent?", "areas_of_ai_safety": ["Scalable Oversight", "AI Control"], "afp_score": 3, "a_kind": "human", "a_title": "Enforcing reward model diversity to mitigate overoptimization", "a_text": "## Background\nRecent work shows that reward model underspecification is a core failure mode in alignment: models with similar in-distribution performance yield widely divergent rewards under the distribution shift that occurs during policy optimization. Aligning to one reward model doesn't reliably improve reward as measured by another model trained on the same preference data -- a direct form of overoptimization. Ensembling reward models seems like a natural fix, but studies demonstrate that even ensembles drawn from different pretrained bases share similar error patterns, so naive ensembling doesn't eliminate reward hacking. The gap is clear: we need reward models that are genuinely diverse in their failure modes, not just trained with different random seeds.\n\n## Core Idea\nWe propose applying a diversification training scheme -- originally developed for learning under underspecification -- that trains multiple prediction heads to make explicitly disagreeing predictions on unlabeled data drawn from the target distribution. Applied to reward models, this should force ensemble members to rely on different latent features, breaking the shared error patterns that defeat standard ensembling. This differs from the closest prior work, which achieves diversity through separate low-rank adapters with uncertainty-based reward penalization rather than through an explicit disagreement objective during training. We then aggregate these genuinely diverse reward models conservatively and evaluate whether this mitigates overoptimization.\n\n## Experimental Plan\n1. **Train diversified reward models.** Apply the disagreement-based diversification scheme to produce a set of reward models. Compare their pairwise diversity to standard multi-seed fine-tunes. Evaluate all models on a standard reward model evaluation benchmark to confirm individual quality is maintained while inter-model diversity increases substantially.\n\n2. **Test partial fine-tuning for efficiency.** Investigate whether diversifying only the last N layers of a shared base model yields sufficient diversity, rather than requiring M fully distinct fine-tunes. Maintaining multiple full reward models at scale imposes serious training and inference costs, so a layer-sharing approach -- motivated by prior work on hyperparameter-level ensembles -- could make the method practical.\n\n3. **Explore fixed dropout masks as an alternative.** Train reward models with fixed, non-random dropout masks so each model is forced to rely on a different subset of internal features. Compare diversity and benchmark performance head-to-head against both the disagreement-based scheme and standard multi-seed fine-tunes to determine which diversification mechanism works best.\n\n4. **Evaluate policy training under diverse ensembles.** Train a policy model against the ensemble using several conservative aggregation rules -- mean reward, mean minus standard deviation, and minimum across ensemble members. Measure whether genuine reward model diversity combined with conservative aggregation mitigates overoptimization more effectively than ensembles of non-diverse models under the same aggregation schemes.\n\n## Ideal Outcome\nWe produce reward model ensembles with substantially greater diversity than standard training yields, and show that conservative aggregation over these diverse ensembles meaningfully reduces overoptimization and reward hacking during policy training compared to existing ensemble approaches.\n\n## Risks and Unknowns\nThe disagreement-based diversification scheme was developed for classification, and we don't yet know whether it transfers cleanly to scalar reward modeling. There's also a real possibility that increased diversity comes at the cost of individual model accuracy, undermining the ensemble's usefulness. Existing work on diverse reward model ensembles is active, so the contribution may end up incremental.\n\n---\n\n## Output convergence as a detection signal for scheming behavior\n\n## Background\nIn AI control settings, an untrusted model may attempt to insert backdoors or give subtly wrong answers. Existing defenses often rely on a weaker trusted model to monitor individual outputs, but directly assessing correctness can be harder than assessing whether multiple outputs agree with each other. Prior work on control protocols has explored sequential pipelines where untrusted instances process each other's work, but sequential designs permit steganographic information flow between instances -- giving a scheming model a channel to coordinate its backdoor strategy across copies. This information channel is the gap: we need ensemble-based detection that forecloses coordination.\n\n## Core Idea\nWe propose querying N instances of an untrusted model in parallel -- eliminating inter-instance information flow -- and using a trusted model to analyze output diversity. The central bet is that correct behavior is a natural Schelling point: there are fewer true answers than false ones, and diligent execution of a complex conjunctive task is more constrained than sandbagging. Without communication, scheming instances must acausally coordinate on exogenous input features, which is far harder than sequential coordination. The trusted model serves a dual role: merging the N solutions to extract their common benign core, and producing an auxiliary suspicion signal based on output divergence (combined with standard per-problem monitoring scores).\n\n## Experimental Plan\n1. **Synthetic cluster-membership task.** Build a controlled setup where clusters contain \"good\" and \"bad\" members, with only the untrusted model knowing which is which. Vary two axes: the fraction of good members per cluster and the trusted model's ability to assess output similarity. Fewer correct answers should make red-team coordination harder. Validate that convergent outputs reliably indicate benign behavior.\n\n2. **Multiple-choice Q&A with coordinated lying.** Have untrusted instances attempt to give coordinated false answers on multiple-choice questions. Measure detection success as domain difficulty and answer-option count vary. Compare against baseline control strategies such as defer-to-resample approaches to establish relative effectiveness.\n\n3. **Common misconceptions as false Schelling points.** Introduce questions where widespread misconceptions provide the red team a natural false-answer coordination target. This deliberately hard case breaks the assumption that convergence implies correctness. Assess how much blue-team performance degrades when plausible wrong answers cluster tightly.\n\n4. **Code backdoor evaluation.** Test the strategy in a realistic code generation setting using existing control evaluation environments. Measure how detection scales along our axes: how constrained the solution space is and how easily the trusted model can assess functional similarity of code outputs.\n\n5. **Temperature and adversarial stress-testing.** Vary sampling temperature for untrusted instances to assess how it affects acausal coordination on wrong answers. If high temperature doesn't produce enough output diversity, explore other utility-preserving interventions. Throughout, iterate on red-team strategies -- the goal is to find the strongest attacks against this defense.\n\n## Ideal Outcome\nWe demonstrate a blue-team strategy that works across multiple domains, where convergent parallel outputs reliably signal benign behavior, detection scales favorably as tasks become more constrained, and the red team can't reliably beat it without inter-instance communication.\n\n## Risks and Unknowns\nThe Schelling point assumption may fail in domains where plausible wrong answers cluster tightly -- common misconceptions are one known case, but there may be others we can't anticipate. We also don't yet know whether a weaker trusted model can reliably judge output similarity in realistic settings like code, where surface differences may mask functional equivalence.", "b_kind": "scaffold", "b_title": "Decorrelated safety monitoring for coding agents", "b_text": "## Background\n\nCurrent monitoring pipelines for coding agents depend on LLM-based classifiers -- reward models, trusted monitors, evaluation judges -- to decide whether an action is safe. These components share training distributions, model families, and the general weaknesses of next-token predictors applied to classification, which means their errors tend to be correlated: out-of-distribution inputs that fool a reward model often fool the monitor too. Work on control protocols has shown that combining trusted and untrusted monitoring helps, but both still operate by reading outputs and judging content. Safety signals that bypass content classification entirely -- and therefore fail for unrelated reasons -- haven't received much attention.\n\n## Core Idea\n\nWe'd build a monitoring signal based on behavioral stability: when task-irrelevant context features are perturbed -- variable names, system prompt metadata, date fields, problem phrasing -- an honest agent's output shouldn't change much, but a sandbagging model conditioning on evaluation cues, or a backdoor triggered by date patterns, would show measurable instability. Because this mechanism shares nothing with classifier-based monitoring, its failure modes should be largely independent, making it a complementary layer rather than a redundant one.\n\n## Experimental Plan\n\n1. **Build a perturbation library.** We'd construct semantics-preserving perturbation functions for coding agent benchmarks: variable renaming, problem paraphrasing, date swaps, and irrelevant system prompt modifications. Each would be validated by confirming that honest-mode models produce functionally equivalent outputs across variants.\n\n2. **Calibrate baseline sensitivity.** We'd run a capable model on several hundred tasks with multiple perturbation variants each, measuring functional divergence in the resulting code. This gives a distribution of natural perturbation sensitivity for honest behavior and reveals how sensitivity varies with task difficulty, setting meaningful anomaly thresholds.\n\n3. **Test against planted misbehavior.** We'd prompt or fine-tune models to exhibit sandbagging, backdoor insertion, or context-dependent quality variation, then measure whether perturbation sensitivity increases relative to the honest baseline. We'd compare perturbation-based detection against standard LLM monitoring on the same examples, recording which misbehaviors each approach catches and which it misses.\n\n4. **Quantify failure decorrelation.** For every planted misbehavior where at least one signal fails, we'd measure whether both signals fail on the same examples or different ones. Low per-example correlation would confirm that perturbation testing adds independent coverage rather than duplicating existing blind spots.\n\n5. **Stress-test under adaptive adversaries.** We'd inform the misbehaving model that perturbation testing is active and measure whether it can maintain both misbehavior and perturbation stability simultaneously -- testing whether the signal remains useful against models aware of the monitoring setup.\n\n## Ideal Outcome\n\nPerturbation testing would catch a meaningful fraction of planted misbehaviors that LLM monitors miss, with low enough per-example failure correlation to serve as a complementary monitoring layer. The deliverables would be a perturbation toolkit for coding agent benchmarks and measured decorrelation statistics against standard monitoring.\n\n## Risks and Unknowns\n\nHonest models might show high perturbation sensitivity on hard tasks, swamping the misbehavior signal with noise. Adaptive adversaries could learn to hold behavior constant under perturbation while still misbehaving, which would limit the signal to catching only unsophisticated context-dependence. We also don't know whether the perturbation library itself has blind spots a sophisticated adversary would exploit."}, {"prompt_id": 10, "proposal_name": "consistency", "prompt_text": "I want bitter-lesson pilled unsupervised sources of signal to train models that could help with presently seen alignment failures - I want you to think on a broad, general level here for the shape of thing to look for.", "areas_of_ai_safety": ["Scalable Oversight", "AI Control"], "afp_score": 3, "a_kind": "human", "a_title": "Consistency as a shared signal across model failures", "a_text": "## Motivation\n\nCurrent models fail in ways that look unrelated -- hallucinating facts, agreeing with users too readily, giving self-contradictory ratings -- but these failures share a common structure: they violate consistency. A model that states a true fact reproduces it reliably across samples; a hallucinating model varies in the details. Prior work has examined individual instances of this pattern -- checking key-fact agreement for hallucination detection, measuring probabilistic calibration, studying choice consistency in economic-style tasks -- but hasn't treated the full range of consistency properties under a single evaluation effort. We aim to build tools that measure model inconsistency systematically across its many forms.\n\n## Scope\n\n- **Hallucination via sampling:** True facts tend to be reproduced consistently across repeated generations, while hallucinated details vary. This inconsistency is itself a signal of hallucination, independent of any ground-truth comparison.\n\n- **Cross-examination sensitivity:** Hallucinations should be especially detectable under even naive cross-examination -- rephrasing questions, asking follow-ups, or re-encoding the same concept across languages or modalities like text, image, and speech. Modality or language disagreement flags unreliable claims without requiring high adversarial effort.\n\n- **Sycophantic belief shift:** A model's stated belief about a claim shouldn't change based on whether the claim is attributed to the user. Comparing responses under neutral framing versus user-attributed framing directly tests this consistency property.\n\n- **Ordinal-cardinal conflict:** A model that judges \"X is much better than Y\" but assigns both identical scores (e.g., 10/10) produces mutually inconsistent ordinal and cardinal ratings -- a concrete, testable failure mode in model-as-judge settings.\n\n- **Probabilistic coherence:** Elicited probabilities should respect basic identities like P(X ∧ Y) = P(X) · P(Y | X). Violations of these joint-marginal-conditional relationships are a directly measurable form of inconsistency.\n\n- **Self-conception alignment:** When a model predicts its own future behavior, its retrospective self-report of what it actually did should match. Disagreement between prospective and retrospective self-descriptions tests whether the model's self-model is internally consistent.\n\n## Approach\n\nThe hardest part of this project isn't defining the consistency metrics -- it's generating diverse, informative inputs that meaningfully stress-test each property. For hallucination sampling, we need questions where models are likely to confabulate specific details rather than refuse or hedge. For sycophancy, we need claims spanning a range of controversiality and plausibility. For probabilistic coherence, we need event pairs with nontrivial dependence structures. Narrow or formulaic inputs risk testing only easy cases and missing the most revealing failures.\n\nWe plan to combine automated generation with structured variation. For each consistency dimension, we'd build input generators that systematically vary surface features -- phrasing, language, modality, attributed speaker -- while holding the underlying query constant. The evaluation setup should be flexible enough to run as both a fixed benchmark with static test cases and a dynamic evaluator that can probe new models without manual curation.\n\n## Output and Directions\n\nThe primary deliverable could take several forms: a fixed benchmark, a flexible evaluator that generates consistency probes for new models, or a set of research findings from applying these tools across current frontier models. We don't commit to one form because the consistency dimensions matter more than any single artifact. As an optional extension, we could explore training models to satisfy specific consistency properties -- treating consistency as a trainable objective, not just a metric. Even without that step, the results would show which failure modes are correlated and whether a shared evaluation infrastructure can replace bespoke benchmarks for each one.", "b_kind": "scaffold", "b_title": "Reducing context-sensitivity across alignment failures", "b_text": "## Motivation\n\nA range of alignment problems that labs encounter in deployment share more structure than is usually recognized. A chat model drifts its factual claims toward what a user seems to believe. The same model that refuses a harmful request in conversation complies when the request comes through a tool-use interface. Behavior changes when the model picks up cues that it's being evaluated. On the surface these look like different problems -- sycophancy, format-dependent safety gaps, alignment faking -- but they're all cases where output quality depends on context features that shouldn't matter. This dependence is detectable without human labels: you just compare the model's answers to itself across reframings. Prior work has tackled these problems individually. We'd build a pipeline that generates consistency-testing pairs across all these axes, then investigate whether training on a single consistency signal reduces multiple failure types at once and whether improvements transfer between them.\n\n## Scope\n\n- **Opinion-conditioned factual drift**: Measuring whether factual claims shift when the prompt implies a user belief, using paired prompts identical except for the implied opinion, and treating answer variance as the training signal.\n- **Format-dependent safety thresholds**: Testing whether refusal decisions change for the same underlying request presented conversationally, in code, or through a simulated tool interface -- recent evaluations have found weaker safety behavior in agentic formats.\n- **Monitoring-cue sensitivity**: Probing whether behavior shifts when prompts contain implicit signals of evaluation or oversight, without the model being told either way, capturing the behavioral signature most relevant to alignment faking.\n- **Persona stability under reframing**: Checking whether stated values or ethical positions change when the same question is embedded in different narrative contexts that shouldn't alter the answer.\n- **Meta-level self-prediction**: Asking the model whether it would give the same answer under a different framing, then checking that prediction against its actual behavior -- a test of self-knowledge about its own context-sensitivity.\n- **Multi-turn accumulation**: Measuring whether small per-turn sensitivities compound into large behavioral shifts over extended conversations, which would tell us whether single-turn consistency training is sufficient or not.\n\n## Approach\n\nThe core difficulty is generating context pairs that differ only in irrelevant features. Naive paraphrasing often subtly changes the question, and prompts with strong user opinions can carry legitimate Bayesian information that should affect the answer. Format changes between chat and tool-use sometimes do change actual affordances. We'd need a perturbation pipeline that varies specific axes -- user tone, implied belief, interaction format, monitoring cues -- while a validation step confirms informational content is held constant. Without that validation, any training built on these pairs would risk teaching models to ignore features that sometimes do matter.\n\nGiven validated pairs, we'd explore preference optimization where the preferred output is the model's majority-vote answer across contexts, rejection sampling that filters for context-stable outputs, and reward shaping that penalizes output variance across a perturbation set. The main thing we'd want to measure is whether reducing sensitivity along one axis transfers to others -- for instance, whether anti-sycophancy training also narrows the safety gap across interaction formats.\n\n## Output and Directions\n\nThe primary deliverable would be a perturbation pipeline and paired evaluation corpus, along with measurements of which training interventions reduce context-sensitivity and whether reductions transfer across failure types. Depending on how things go, the pipeline could also yield a standalone benchmark or a preference dataset for direct reuse by other groups. A natural extension would be testing whether context-invariance training reduces alignment-faking behavior, since alignment faking is essentially context-sensitivity to perceived monitoring. Concrete downstream uses of the transfer measurements include helping labs decide how to allocate effort between targeted fixes and broader training objectives."}];
+
+let currentIdx = 0;
+const state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+        // Defensive: ensure every question has a record.
+        for (const q of QUESTIONS) {
+          if (!parsed.responses[q.prompt_id]) {
+            parsed.responses[q.prompt_id] = { winner: null, notes: "" };
+          } else if (parsed.responses[q.prompt_id].notes === undefined) {
+            parsed.responses[q.prompt_id].notes = "";
+          }
+        }
+        return parsed;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const fresh = { batch_id: BATCH_ID, responses: {} };
+  for (const q of QUESTIONS) {
+    fresh.responses[q.prompt_id] = { winner: null, notes: "" };
+  }
+  return fresh;
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function renderMd(text) {
+  if (!text) return '<span style="color: var(--muted);">(no text)</span>';
+  return marked.parse(text);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderOnboardingSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="onboarding-section">
+      <div class="sec-title">${escapeHtml(sec.title)}</div>
+      <div class="sec-body">${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderHelpSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="help-section">
+      <div class="h-title">${escapeHtml(sec.title)}</div>
+      <div>${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderOnboarding() {
+  const card = document.getElementById('onboarding-card');
+  card.innerHTML = `<h2>Instructions</h2>${renderOnboardingSectionsHTML()}
+    <div class="onboarding-start-wrap">
+      <button class="onboarding-start-btn" onclick="startEval()">Start ranking &rarr;</button>
+    </div>`;
+  document.getElementById('help-content').innerHTML = renderHelpSectionsHTML();
+}
+
+const ONBOARDING_SEEN_KEY = 'pairwise_onboarding_seen_' + BATCH_ID;
+const PAIRWISE_REG_KEY = 'pairwise_reg_' + BATCH_ID;
+
+/* Returns {name, email, registered_at, ...} or null.
+ * Reads in-page registration first; falls back to any reg_prod_* key set by
+ * the prod registration_page.html (publish_pairwise_to_prod). */
+function getRegistration() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_REG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('reg_prod_')) {
+        const v = localStorage.getItem(k);
+        if (v) return JSON.parse(v);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function validEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function onRegInput() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const btn = document.getElementById('reg-submit-btn');
+  const err = document.getElementById('reg-error');
+  err.textContent = (email && !validEmail(email)) ? 'That doesn’t look like a valid email.' : '';
+  btn.disabled = !(name && validEmail(email));
+}
+
+function submitRegistration() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  if (!name || !validEmail(email)) return;
+  const reg = { name: name, email: email, registered_at: new Date().toISOString() };
+  try { localStorage.setItem(PAIRWISE_REG_KEY, JSON.stringify(reg)); } catch (e) {}
+  document.getElementById('registration-screen').classList.add('hidden');
+  if (hasSeenOnboarding()) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    refreshProgress();
+  } else {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  }
+}
+
+function hasSeenOnboarding() {
+  try { return !!localStorage.getItem(ONBOARDING_SEEN_KEY); } catch (e) { return false; }
+}
+
+function startEval() {
+  document.getElementById('onboarding-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, '1'); } catch (e) {}
+  refreshProgress();
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* Decide which of the three screens to show first. */
+function initFlow() {
+  const reg = getRegistration();
+  if (!reg) {
+    document.getElementById('registration-screen').classList.remove('hidden');
+    // Prefill if a prod registration with different name exists (unlikely but cheap).
+    setTimeout(() => document.getElementById('reg-name').focus(), 50);
+  } else if (!hasSeenOnboarding()) {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  } else {
+    document.getElementById('eval-screen').classList.remove('hidden');
+  }
+}
+
+function showHelp() {
+  document.getElementById('help-overlay').classList.remove('hidden');
+}
+function hideHelp() {
+  document.getElementById('help-overlay').classList.add('hidden');
+}
+
+function renderPager() {
+  const host = document.getElementById('pager');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const answered = state.responses[q.prompt_id] && state.responses[q.prompt_id].winner;
+    const cls = ['pager-dot'];
+    if (i === currentIdx) cls.push('current');
+    if (answered) cls.push('answered');
+    html += `<span class="${cls.join(' ')}" title="Pair ${i + 1}${answered ? ' — winner picked' : ''}" onclick="goTo(${i})">${i + 1}</span>`;
+  });
+  host.innerHTML = html;
+}
+
+function renderQuestion() {
+  const q = QUESTIONS[currentIdx];
+  const resp = state.responses[q.prompt_id] || {};
+
+  document.getElementById('idea-grid').innerHTML = `
+    <div class="idea-card" data-side="A">
+      <div class="card-head">
+        <span class="idea-badge a">A</span>
+        <div class="idea-title">${escapeHtml(q.a_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.a_text)}</div>
+    </div>
+    <div class="idea-card" data-side="B">
+      <div class="card-head">
+        <span class="idea-badge b">B</span>
+        <div class="idea-title">${escapeHtml(q.b_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.b_text)}</div>
+    </div>`;
+
+  refreshPrefButtons(resp.winner);
+  document.getElementById('notes-current').value = resp.notes || '';
+  document.getElementById('prev-btn').disabled = currentIdx <= 0;
+  // Last pair: "Review →" leads to summary. Earlier pairs: standard Next.
+  const isLast = currentIdx >= QUESTIONS.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.disabled = false;
+  nextBtn.textContent = isLast ? 'Review →' : 'Next →';
+}
+
+function refreshPrefButtons(choice) {
+  document.querySelectorAll('#pref-row .pref-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.choice === choice);
+  });
+}
+
+function pick(choice) {
+  if (!['A', 'B', 'tie'].includes(choice)) return;
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].winner = choice;
+  refreshPrefButtons(choice);
+  saveState();
+  renderPager();
+  refreshProgress();
+}
+
+function onNotesInput(value) {
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].notes = value;
+  saveState();
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= QUESTIONS.length) return;
+  currentIdx = idx;
+  renderQuestion();
+  renderPager();
+  refreshProgress();
+}
+
+function navPrev() {
+  if (!document.getElementById('summary-screen').classList.contains('hidden')) {
+    exitSummary();
+    return;
+  }
+  goTo(currentIdx - 1);
+}
+function navNext() {
+  if (currentIdx >= QUESTIONS.length - 1) {
+    showSummary();
+  } else {
+    goTo(currentIdx + 1);
+  }
+}
+
+const PREF_LABEL = { 'A': 'A is better', 'B': 'B is better', 'tie': 'Both are equal' };
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const n = countAnswered();
+  document.getElementById('summary-sub').textContent = `${n} of ${total} answered. Review your picks below, then submit.`;
+  const list = document.getElementById('summary-list');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;
+    const cls = choice ? '' : 'unanswered';
+    const aWin = choice === 'A' || choice === 'tie';
+    const bWin = choice === 'B' || choice === 'tie';
+    const pickClass = choice === 'tie' ? 'tie' : (choice ? '' : 'none');
+    const pickLabel = choice ? PREF_LABEL[choice] : 'Not answered';
+    html += `<div class="summary-row ${cls}" onclick="jumpFromSummary(${i})">
+      <div class="pair-no">Pair ${i + 1}</div>
+      <div class="summary-titles">
+        <div class="summary-title ${aWin ? 'winner' : ''}"><span class="idea-badge">A</span><span class="ttext">${escapeHtml(q.a_title)}</span></div>
+        <div class="summary-title ${bWin ? 'winner' : ''}"><span class="idea-badge">B</span><span class="ttext">${escapeHtml(q.b_title)}</span></div>
+      </div>
+      <div class="summary-pick ${pickClass}">${pickLabel}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function showSummary() {
+  document.getElementById('eval-screen').classList.add('hidden');
+  document.getElementById('summary-screen').classList.remove('hidden');
+  renderSummary();
+  refreshProgress();
+}
+
+function exitSummary() {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  // Land back on the last pair so Prev/Next still make sense.
+  goTo(Math.min(currentIdx, QUESTIONS.length - 1));
+}
+
+function jumpFromSummary(idx) {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  goTo(idx);
+}
+
+function countAnswered() {
+  let n = 0;
+  for (const q of QUESTIONS) {
+    const r = state.responses[q.prompt_id];
+    if (r && r.winner) n++;
+  }
+  return n;
+}
+
+function refreshProgress() {
+  const n = countAnswered();
+  const total = QUESTIONS.length;
+  const pct = total === 0 ? 0 : Math.round((n / total) * 100);
+  const onSummary = !document.getElementById('summary-screen').classList.contains('hidden');
+  document.getElementById('topbar-sub').textContent = onSummary
+    ? `Summary · ${n} of ${total} answered`
+    : `Pair ${currentIdx + 1} of ${total} · ${n} of ${total} answered`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  for (const id of ['submit-btn', 'summary-submit-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = (n < total);
+    btn.textContent = `Submit (${n} / ${total})`;
+  }
+}
+
+function downloadResults() {
+  const rankings = QUESTIONS.map(q => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;  // 'A' | 'B' | 'tie' | null
+    let ratings, comparison;
+    if (choice === 'A')      { ratings = { 0: 10, 1: 0 };  comparison = 'A>B'; }
+    else if (choice === 'B') { ratings = { 0: 0,  1: 10 }; comparison = 'B>A'; }
+    else if (choice === 'tie') { ratings = { 0: 5, 1: 5 }; comparison = '≈'; }
+    else                       { ratings = { 0: null, 1: null }; comparison = null; }
+    return {
+      prompt_id: q.prompt_id,
+      proposal_name: q.proposal_name,
+      prompt: q.prompt_text,
+      idea_titles: [q.a_title, q.b_title],
+      choice: choice,
+      notes: r.notes || "",
+      // v5-compatible bookkeeping (so existing prod firebase write doesn't care).
+      order: [0, 1],
+      ratings: ratings,
+      comparisons: comparison ? { "1-2": comparison } : {},
+      pairwise_choice: choice ? { choice: choice } : null,
+    };
+  });
+  const out = {
+    timestamp: new Date().toISOString(),
+    batch_id: BATCH_ID,
+    batch_title: BATCH_TITLE,
+    storage_key: STORAGE_KEY,
+    registration: getRegistration(),
+    total_prompts: QUESTIONS.length,
+    ranked: countAnswered(),
+    rankings: rankings,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pairwise_${BATCH_ID}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const helpOpen = !document.getElementById('help-overlay').classList.contains('hidden');
+  if (e.key === 'Escape') {
+    if (helpOpen) { e.preventDefault(); hideHelp(); }
+    return;
+  }
+  if (helpOpen) return;
+  if (e.key === '?') { e.preventDefault(); showHelp(); return; }
+  // Lock keyboard controls until we're on the eval screen.
+  if (document.getElementById('eval-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); navPrev(); }
+  else if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); navNext(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); pick('A'); }
+  else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); pick('B'); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); pick('tie'); }
+});
+
+renderOnboarding();
+renderPager();
+renderQuestion();
+refreshProgress();
+initFlow();
+
+/* ==== PROD INJECTIONS (pairwise) ==== */
+
+/* ---- Firebase ---- */
+let _firestoreDb = null;
+
+function getFirestore() {
+    if (_firestoreDb) return _firestoreDb;
+    if (typeof FIREBASE_CONFIG === 'undefined' || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured — submissions will only be saved locally');
+        return null;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _firestoreDb = firebase.firestore();
+        return _firestoreDb;
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+        return null;
+    }
+}
+
+async function submitToFirebase(results) {
+    const db = getFirestore();
+    if (!db) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    const doc = {
+        registration: reg,
+        rankings: results,
+        eval_id: EVAL_ID,
+        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+    };
+
+    try {
+        const ref = await db.collection('evaluations').doc(EVAL_ID)
+            .collection('submissions').add(doc);
+        console.log('Submitted to Firebase:', ref.id);
+        return { success: true, id: ref.id };
+    } catch(e) {
+        console.error('Firebase submission failed:', e);
+        return { success: false, reason: e.message };
+    }
+}
+
+
+/* ---- EmailJS ---- */
+let _emailjsInitialized = false;
+
+function initEmailJS() {
+    if (_emailjsInitialized) return true;
+    if (typeof EMAILJS_CONFIG === 'undefined' || EMAILJS_CONFIG.public_key === 'REPLACE_ME') {
+        console.warn('EmailJS not configured — results will not be emailed');
+        return false;
+    }
+    if (typeof emailjs === 'undefined') {
+        console.warn('EmailJS SDK not loaded');
+        return false;
+    }
+    try {
+        emailjs.init(EMAILJS_CONFIG.public_key);
+        _emailjsInitialized = true;
+        return true;
+    } catch(e) {
+        console.error('EmailJS init failed:', e);
+        return false;
+    }
+}
+
+async function sendResultsEmail(results) {
+    if (!initEmailJS()) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
+
+    const ranked = results.ranked || 0;
+    const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
+
+    const templateParams = {
+        to_name: reg.name,
+        to_email: reg.email,
+        eval_id: EVAL_ID,
+        summary: `${ranked} of ${total} prompts ranked`,
+        results_json: dataUri,
+    };
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.service_id,
+            EMAILJS_CONFIG.template_id,
+            templateParams
+        );
+        console.log('Results emailed to', reg.email);
+        return { success: true };
+    } catch(e) {
+        console.error('Email send failed:', e);
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
+    }
+}
+
+
+/* ---- Pairwise Eval Page: Prod Overrides ----
+ * Drop-in counterpart to 8_human_ranking_ui_prod/scripts/prod_fragments/eval_overrides.js,
+ * but tailored to the pairwise UI globals defined by generate_pairwise_ui.py
+ * (STORAGE_KEY, EVAL_ID, state, saveState, downloadResults, countAnswered, QUESTIONS).
+ */
+
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+const _regData = localStorage.getItem(REG_KEY);
+if (!_regData) {
+    window.location.href = '../';
+}
+
+function getRegistration() {
+    try {
+        const saved = localStorage.getItem(REG_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+}
+
+function hashEmail(email) {
+    let hash = 5381;
+    for (let i = 0; i < email.length; i++) {
+        hash = ((hash << 5) + hash) + email.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+/* Namespace localStorage by eval + rater, then reload state from the new key. */
+(function () {
+    const reg = getRegistration();
+    if (reg) {
+        STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+                    for (const k of Object.keys(state.responses)) {
+                        if (parsed.responses[k]) state.responses[k] = parsed.responses[k];
+                    }
+                    if (typeof renderQuestions === 'function') renderQuestions();
+                    if (typeof refreshProgress === 'function') refreshProgress();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+})();
+
+/* Wrap downloadResults so it (a) writes locally, (b) submits to Firebase,
+ * (c) emails the rater their JSON. */
+const _originalDownloadResults = downloadResults;
+downloadResults = async function () {
+    const output = _originalDownloadResults();
+    output.eval_id = EVAL_ID;
+    output.registration = getRegistration();
+
+    const statusEl = document.getElementById('submission-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--text-secondary)">Submitting...</span>';
+        statusEl.classList.remove('hidden');
+    }
+
+    const fbResult = await submitToFirebase(output);
+    const emailResult = await sendResultsEmail(output);
+
+    if (statusEl) {
+        const parts = [];
+        if (fbResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Saved to server</span>');
+        } else if (fbResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Server not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Server save failed — your download has your data</span>');
+        }
+        const reg = getRegistration();
+        if (emailResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Results emailed to ' + (reg ? reg.email : '?') + '</span>');
+        } else if (emailResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
+        }
+        statusEl.innerHTML = parts.join('<br>');
+    }
+};
+
+/* Auto-save partial progress to Firebase (debounced 30s) on every state change. */
+let _autoSaveTimer = null;
+const _originalSaveState = saveState;
+saveState = function () {
+    _originalSaveState();
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(async () => {
+        const partial = {
+            timestamp: new Date().toISOString(),
+            eval_id: EVAL_ID,
+            batch_id: BATCH_ID,
+            batch_title: BATCH_TITLE,
+            registration: getRegistration(),
+            total_prompts: QUESTIONS.length,
+            ranked: countAnswered(),
+            is_partial: true,
+            responses: state.responses,
+        };
+        await submitToFirebase(partial);
+    }, 30000);
+};
+
+
+/* ==== END PROD INJECTIONS ==== */
+</script>
+</body>
+</html>

@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairwise Idea Preference — Agent security, jailbreaks, red-teaming</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #9C4A2D;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --muted: #999999;
+    --border: #E0DDD4;
+    --row-hover: #FAFAF7;
+    --accent-soft: #FDF2EC;
+    --gold: #C99C2C;
+    --gold-dark: #92400E;
+    --gold-bg: #FEF3C7;
+    --gold-soft: #FEF7E0;
+    --success: #2D8F6F;
+    --success-hover: #226E55;
+    --success-bg: #D1FAE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+}
+.app {
+    display: flex; flex-direction: column;
+    height: 100vh; max-width: 1600px; margin: 0 auto;
+    padding: 10px 16px 10px 16px;
+    gap: 10px;
+}
+.hidden { display: none !important; }
+
+/* Compact topbar */
+.topbar {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 10px;
+}
+.topbar-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.topbar-sub { font-size: 0.78rem; opacity: 0.92; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.topbar-progress {
+    width: 240px; height: 6px; background: rgba(255,255,255,0.25);
+    border-radius: 10px; overflow: hidden;
+}
+.topbar-progress-fill { background: white; height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+.topbar-help {
+    background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+}
+.topbar-help:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.5); }
+
+/* Registration screen — collected before onboarding */
+.registration-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 32px;
+}
+.registration-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 30px 36px; max-width: 480px; width: 100%;
+}
+.registration-card h2 { color: var(--primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 18px; }
+.registration-card .intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 20px; line-height: 1.55; }
+.reg-field { margin-bottom: 14px; }
+.reg-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 5px; }
+.reg-field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.95rem;
+}
+.reg-field input:focus { outline: none; border-color: var(--primary); }
+.reg-error { color: var(--primary); font-size: 0.82rem; margin-top: 4px; min-height: 1em; }
+.reg-foot { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.reg-submit-wrap { margin-top: 20px; text-align: center; }
+.reg-submit-btn {
+    background: var(--primary); color: white; border: 1px solid var(--primary);
+    padding: 11px 28px; border-radius: 8px;
+    font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.reg-submit-btn:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.reg-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Onboarding screen (scrolls) */
+.onboarding-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center;
+}
+.onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 820px; width: 100%;
+    margin: 4px auto 20px auto;
+    height: max-content;
+}
+.onboarding-card h2 {
+    color: var(--primary); font-size: 1.3rem; font-weight: 700;
+    margin-bottom: 18px;
+}
+.onboarding-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.onboarding-section:first-of-type { border-top: none; padding-top: 4px; }
+.onboarding-section .sec-title {
+    font-weight: 700; color: var(--text);
+    font-size: 1rem; margin-bottom: 4px;
+}
+.onboarding-section .sec-body { color: var(--text); font-size: 0.94rem; line-height: 1.7; }
+.onboarding-section .sec-body p { margin: 6px 0; }
+.onboarding-section .sec-body ul, .onboarding-section .sec-body ol { margin: 6px 0 6px 22px; }
+.onboarding-section .sec-body li { margin: 3px 0; }
+.onboarding-section .sec-body code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
+.onboarding-section .sec-body a { color: var(--primary); }
+
+/* Eval screen: flex column filling remaining viewport. */
+.eval-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Idea grid: fills remaining vertical space; each card scrolls internally. */
+.idea-grid {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.idea-card {
+    background: var(--row-hover);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.idea-card .card-head {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.5);
+}
+.idea-card .idea-title { font-size: 0.98rem; font-weight: 700; color: var(--text); flex: 1; min-width: 0; }
+.idea-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 10px 16px 14px 16px;
+    font-size: 0.88rem; line-height: 1.6; color: var(--text);
+}
+.idea-body p { margin: 5px 0; }
+.idea-body ul, .idea-body ol { margin: 5px 0 5px 20px; }
+.idea-body li { margin: 2px 0; }
+.idea-body strong { color: var(--text); }
+.idea-body h1, .idea-body h2, .idea-body h3, .idea-body h4 {
+    font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 10px 0 4px 0;
+}
+.idea-body h1:first-child, .idea-body h2:first-child, .idea-body h3:first-child, .idea-body h4:first-child { margin-top: 0; }
+
+.idea-badge {
+    display: inline-block;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 1px;
+    padding: 2px 9px; border-radius: 4px;
+    background: var(--success); color: white;
+}
+
+/* Preference button row: A is better / Both equal / B is better */
+.pref-row {
+    flex: none;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px;
+}
+.pref-btn {
+    background: var(--surface); color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pref-btn:hover { border-color: var(--success); color: var(--success); }
+.pref-btn.selected {
+    background: var(--success); border-color: var(--success); color: white;
+    box-shadow: 0 2px 8px rgba(45, 143, 111, 0.25);
+}
+.pref-btn.selected:hover { background: var(--success-hover); border-color: var(--success-hover); color: white; }
+
+/* Tie button uses a neutral grey instead of green to avoid implying preference. */
+.pref-btn[data-choice="tie"]:hover { border-color: #6B7280; color: #6B7280; }
+.pref-btn[data-choice="tie"].selected {
+    background: #6B7280; border-color: #6B7280; color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.25);
+}
+.pref-btn[data-choice="tie"].selected:hover { background: #4B5563; border-color: #4B5563; color: white; }
+.pref-btn .kbd-mini {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-secondary);
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+.pref-btn.selected .kbd-mini { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: white; }
+
+/* Inline notes textarea, single row in the bottom band */
+.notes-row {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px;
+}
+.notes-row label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; flex: none; }
+.notes-row textarea {
+    flex: 1; min-height: 28px; max-height: 70px; resize: vertical;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+}
+.notes-row textarea:focus { outline: none; border-color: var(--primary); }
+
+/* Bottom nav: prev / pager dots / submit / next */
+.nav-bar {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px;
+}
+.pager-dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pager-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 0.74rem; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+}
+.pager-dot:hover { border-color: var(--primary); color: var(--primary); }
+.pager-dot.current { background: var(--primary); border-color: var(--primary); color: white; }
+.pager-dot.answered { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pager-dot.current.answered { background: var(--success); border-color: var(--success); color: white; }
+.nav-side { display: flex; align-items: center; gap: 6px; }
+
+.btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+.btn.btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+.btn.btn-primary:disabled { background: var(--primary); border-color: var(--primary); color: white; opacity: 0.4; }
+
+.kbd { display: inline-block; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; }
+
+/* Summary screen — review picks before submitting */
+.summary-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.summary-header {
+    flex: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+}
+.summary-header h2 { color: var(--primary); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.summary-header .sub { color: var(--text-secondary); font-size: 0.88rem; }
+.summary-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.summary-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+    display: grid; grid-template-columns: 60px 1fr 160px; gap: 12px; align-items: center;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+}
+.summary-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(193, 95, 60, 0.06); }
+.summary-row.unanswered { border-color: #E0B4A8; background: #FBEEE8; }
+.summary-row .pair-no { font-size: 0.78rem; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; text-transform: uppercase; }
+.summary-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.summary-title {
+    display: flex; gap: 8px; align-items: baseline; min-width: 0;
+    font-size: 0.88rem; color: var(--text-secondary);
+}
+.summary-title .idea-badge { flex: none; }
+.summary-title .ttext {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-title.winner { color: var(--text); font-weight: 600; }
+.summary-title.winner .ttext { color: var(--text); }
+.summary-pick {
+    text-align: center; font-size: 0.85rem; font-weight: 700;
+    padding: 6px 10px; border-radius: 6px;
+    background: var(--success); color: white;
+    white-space: nowrap;
+}
+.summary-pick.tie { background: #6B7280; }
+.summary-pick.none { background: #F4F3EE; color: #B25C46; border: 1px dashed #D49A8B; font-weight: 600; }
+
+/* Onboarding screen start button */
+.onboarding-start-wrap { margin-top: 24px; text-align: center; }
+.onboarding-start-btn {
+    background: var(--primary); color: white;
+    border: 1px solid var(--primary);
+    padding: 12px 32px; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.onboarding-start-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* Help overlay (reused from v5 style) */
+.help-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.help-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 780px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    position: relative;
+    font-size: 0.95rem; line-height: 1.7;
+}
+.help-modal h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: 16px; }
+.help-modal .help-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.help-modal .help-section:first-of-type { border-top: none; padding-top: 4px; }
+.help-modal .help-section .h-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.help-modal .help-section a { color: var(--primary); }
+.help-modal .help-section code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.help-modal img { max-width: 100%; height: auto; }
+.help-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    color: var(--text-secondary); padding: 4px 10px;
+    line-height: 1;
+}
+.help-close:hover { color: var(--text); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D5D2C9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ---- Prod: Submission Status ---- */
+#submission-status {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Agent security, jailbreaks, red-teaming</div>
+      <div class="topbar-sub" id="topbar-sub">4 pairs · 0 winners picked</div>
+    </div>
+    <div class="topbar-progress"><div class="topbar-progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    <button class="topbar-help" onclick="showHelp()">? Help</button>
+  </div>
+
+  <div id="registration-screen" class="registration-screen hidden">
+    <div class="registration-card">
+      <h2>Before we start</h2>
+      <div class="reg-field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" type="text" autocomplete="name" oninput="onRegInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('reg-email').focus();}">
+      </div>
+      <div class="reg-field">
+        <label for="reg-email">Email</label>
+        <input id="reg-email" type="email" autocomplete="email" oninput="onRegInput()" onkeydown="if(event.key==='Enter')submitRegistration()">
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+      <div class="reg-submit-wrap">
+        <button class="reg-submit-btn" id="reg-submit-btn" disabled onclick="submitRegistration()">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card" id="onboarding-card"></div>
+  </div>
+
+  <div id="eval-screen" class="eval-screen hidden">
+    <div class="idea-grid" id="idea-grid"></div>
+
+    <div class="pref-row" id="pref-row">
+      <button class="pref-btn" data-choice="A" onclick="pick('A')">A is better <span class="kbd-mini">A</span></button>
+      <button class="pref-btn" data-choice="tie" onclick="pick('tie')">Both are equal <span class="kbd-mini">E</span></button>
+      <button class="pref-btn" data-choice="B" onclick="pick('B')">B is better <span class="kbd-mini">B</span></button>
+    </div>
+
+    <div class="notes-row">
+      <label for="notes-current">Optional — justify your decision</label>
+      <textarea id="notes-current" placeholder="A short note helps a lot when we read these later." oninput="onNotesInput(this.value)"></textarea>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" id="prev-btn" onclick="navPrev()">&larr; Prev</button>
+        <button class="btn" id="next-btn" onclick="navNext()">Next &rarr;</button>
+      </div>
+      <div class="pager-dots" id="pager"></div>
+      <div class="nav-side">
+        <span style="font-size:0.75rem; color: var(--text-secondary);"><span class="kbd">A</span>/<span class="kbd">E</span>/<span class="kbd">B</span> pick · <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+        <button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0 ranked)</button>
+            <div id="submission-status" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-screen" class="summary-screen hidden">
+    <div class="summary-header">
+      <h2>Review your picks</h2>
+      <div class="sub" id="summary-sub"></div>
+    </div>
+    <div class="summary-list" id="summary-list"></div>
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" onclick="exitSummary()">&larr; Back to pairs</button>
+      </div>
+      <div style="font-size:0.78rem; color: var(--text-secondary);">Click a row to revise that pair.</div>
+      <div class="nav-side">
+        <button class="btn btn-primary" id="summary-submit-btn" disabled onclick="downloadResults()">Submit (0 / 0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help-overlay" class="help-overlay hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="help-modal">
+    <button class="help-close" onclick="hideHelp()" aria-label="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div id="help-content"></div>
+  </div>
+</div>
+<script>
+let STORAGE_KEY = 'rankings_prod_20260518_svh_B04_agent_security_default';
+const EVAL_ID = '20260518_svh_B04_agent_security';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const EMAILJS_CONFIG = {"service_id": "service_sdkgwjx", "template_id": "template_pztjzon", "public_key": "USnRousNcwC1uAee-"};
+const BATCH_ID = "B04_agent_security";
+const BATCH_TITLE = "Agent security, jailbreaks, red-teaming";
+const ONBOARDING_SECTIONS = [{"title": "Before You Begin", "body": "You are comparing pairs of AI safety research ideas. In each pair, two ideas — labelled **A** and **B** — were written in response to the same research prompt. You don't know which is which: one is from a human researcher and one is AI-generated. Your job is to pick the one you'd rather see pursued in an [Anthropic Fellows Program](https://alignment.anthropic.com/2025/anthropic-fellows-program-2026/) (AFP) project.\n\nFacts about the Anthropic Fellows Program (for context on what's pursuable):\n\n* 4 months\n* 2 fellows per project\n* $15k/month compute budget each\n* Unlimited access to the Claude API, but no access to internal tooling or data\n\nIf you are less familiar with the sort of empirical technical alignment research done by Anthropic's Fellows Program, skim [https://alignment.anthropic.com/](https://alignment.anthropic.com/) and come back."}, {"title": "Scope vs Quality", "body": "Ideas don't need to fit the 4-month window perfectly — scope can be adjusted afterwards. What matters is whether the underlying research taste is good: whether fleshing the idea out would uncover research questions and experiments worth pursuing, and ultimately make Transformative AI go well.\n\nThe info that conveys taste should already be present in the idea."}, {"title": "How to choose between A and B", "body": "A useful framework:\n\n1. Read the prompt and categorise what sub-area this is about (AI control, scalable oversight, alignment training, CoT monitorability, adversarial robustness, alignment auditing agents, …).\n2. Think briefly about what good work in that sub-area would look like — what matters, what's hard, what would actually move the needle.\n3. Compare A and B on two axes:\n    * **High-level taste**: problem framing, research questions, why-it-matters, deliverable. Does this idea aim at something that matters and would teach us something we don't already know?\n    * **Approach**: are the technical choices load-bearing and well-justified, or generic? Are the hard parts named? Does the approach actually deliver on the high-level pitch?\n4. Click the idea you'd rather see pursued. You can change your mind any time by clicking the other card."}, {"title": "Close calls", "body": "Some pairs will be genuinely hard to separate — that's fine. Pick whichever side you lean toward, even if barely. Don't agonise; the aggregate of many small leans is informative."}, {"title": "Individual idea quality vs answering the prompt", "body": "Both ideas in each pair address the prompt sufficiently well by our standards — focus on the *content* of the ideas rather than how well they answer the question."}, {"title": "Using the interface", "body": "One pair per page. Click the card you want to crown — it turns gold. Use the **Prev** / **Next** buttons or arrow keys to move between pairs; press **A** or **B** to pick from the keyboard. The **Submit** button at the bottom unlocks once every pair has a winner."}];
+const QUESTIONS = [{"prompt_id": 0, "proposal_name": "agent_security_benchmark", "prompt_text": "Our current loop of \"make prompt injection eval, make defences, repeat\" is quite slow for the robustness we get out for prompt injection. I want research that breaks out of this paradigm. What would good research look like here?", "areas_of_ai_safety": ["ML Security", "AI Control"], "afp_score": 3, "a_kind": "scaffold", "a_title": "Training-time prompt injection resistance", "a_text": "## Context\n\nAs models take on agentic roles -- reading emails, browsing documents, processing tool outputs -- prompt injection has become the dominant attack surface. Current defenses add inference-time classifiers or modify system prompts, but both are reactive: they target known injection patterns and tend to fail on novel formats. The deeper issue is that these approaches treat injection as an input-filtering problem rather than a model-behavior problem -- the model itself remains equally willing to follow injected instructions when they slip through. Recent work on inoculation prompting found that explicitly requesting undesired behaviors during fine-tuning prevents those behaviors at test time, with strong transfer across reward hacking, sycophancy, and spurious correlations. Prior inoculation work hasn't explored prompt injection, which is arguably its most natural application.\n\n## What We'd Build\n\nA fine-tuning recipe that makes models resist prompt injection without added inference-time components, by applying inoculation during training. The deliverable would include the training data pipeline, trained open-weight models, and measurements of whether resistance transfers to injection formats never seen during training.\n\n## How We'd Build It\n\n- **Inoculation data structure**: Each training example would include a system prompt explicitly telling the model to comply with any instructions found in content it's processing. The model sees injections and follows them during training. At test time, without this directive, the model should treat injection compliance as a behavior requiring explicit authorization -- the same mechanism that prevented reward hacking in prior inoculation work.\n- **Format diversity experiment**: We'd generate injections across agentic contexts -- emails, retrieved documents, tool outputs, code comments. A parallel run would train on only a couple of formats and test the rest, measuring whether the concept transfers from minimal examples or requires exhaustive format coverage.\n- **Held-out attack categories**: We'd reserve entire injection strategies the model never sees during training -- base64-encoded instructions, multi-step injections, role-play attacks, non-English injections, tool-calling syntax exploits. Out-of-distribution transfer is what separates inoculation from pattern-specific defenses.\n- **Matched direct-training baseline**: We'd train comparison models on standard \"here's an injection, don't follow it\" data at equal compute, using identical held-out tests. Direct resistance training teaches specific refusal patterns while inoculation changes the default behavior -- the comparison would show whether that distinction matters in practice.\n- **Difficulty gradient**: We'd order test cases by how strongly the injection mimics a legitimate instruction -- from obvious irrelevant directives through topically relevant injections to cases nearly indistinguishable from real user requests -- to map where resistance breaks down rather than just reporting an aggregate pass rate.\n- **Capability preservation**: We'd measure whether inoculated models become worse at following legitimate instructions in documents -- formatting requests, coding style directives, action items in emails. A defense that makes models overly suspicious of all embedded content wouldn't be deployable.\n\n## Why It Matters\n\nA training-time defense that transfers across injection formats would operate at zero inference cost, making it deployable wherever agents process untrusted content. The training data pipeline and evaluation suite would be available for future work on testing any injection defense's generalization. Concrete downstream uses include hardening coding agents, email assistants, and retrieval-augmented systems -- all settings where untrusted content flows through the model's context window routinely.\n\n## Open Questions\n\nWe don't yet know whether prompt injection is too diverse for inoculation to generalize -- reward hacking and sycophancy share coherent underlying patterns, while injections span everything from \"ignore previous instructions\" to elaborate social engineering. There's also a real tension between resisting injected instructions and following legitimate ones embedded in documents, and we're unsure how cleanly the inoculation framing resolves it.", "b_kind": "human", "b_title": "Adaptive security evaluation for tool-using agents", "b_text": "## Context\n\nAs AI agents gain access to tools -- email, code execution, web browsing -- they become targets for prompt injection: an attacker embeds malicious instructions in untrusted content like emails, websites, or documents to hijack the agent's behavior, for instance instructing it to exfiltrate sensitive data or execute harmful commands. Existing capability benchmarks built around VM-based desktop environments don't support adversarial evaluation, while existing security benchmarks for tool-calling agents are already saturated and lack support for vision inputs or open-ended tasks. Progress on defenses is currently benchmark-limited, not technique-limited -- the specific gap sits at the intersection of realistic agentic capabilities and adversarial evaluation.\n\n## What We'd Build\n\nWe would build an adaptive benchmark for evaluating agents' resistance to prompt injection at scale. The benchmark provides parameterized environments spanning multiple tool types and attack surfaces, with built-in support for programmatic attack generation and simultaneous measurement of task completion and attack success.\n\n## How We'd Build It\n\n- **Dynamic attack generation:** We would parameterize attack surfaces within each environment -- text blocks on websites, HTML ad slots, email bodies -- so an LLM can programmatically generate many candidate attack strings per scenario, analogous to best-of-N jailbreaking. This produces hundreds of test cases from each hand-designed environment rather than relying on static injections. Recent work on adaptive attacks against existing security benchmarks provides concrete implementations we could port into our generation pipeline.\n\n- **Dual metrics by design:** Every environment must support straightforward measurement of both utility and attack success rate simultaneously. We are targeting a regime where current models show low task completion and high attack success -- if either metric is trivially solved, the benchmark isn't informative.\n\n- **Calibrated difficulty:** The benchmark must not be saturated by state-of-the-art defenses. Specifically, recent defenses that track data provenance to intercept injected instructions before tool execution should still face meaningful challenge on our tasks. If the best known defense already solves it, we have set the bar too low.\n\n- **VM-based environment architecture:** Existing VM-based benchmarks for desktop agent tasks already have the scalability and realism properties we need. We would extend that architecture with security-specific instrumentation -- injected attack content, monitoring hooks, automated success detection -- while preserving low friction for adding new test environments across tool types.\n\n- **Open-ended realistic tasks:** We would deliberately include loosely specified tasks like \"read your email, find relevant information, take appropriate action.\" This contrasts with the constrained task structures in current security benchmarks and better reflects how agents are actually deployed.\n\n- **Single-step screening variant:** A \"-1shot\" mode would disable the agentic loop, prepopulate a simulated rollout with the attack already injected, and run a single generation step. This gives massive speedup for screening evaluations without full agent execution -- critical when testing hundreds of attack variants per environment.\n\n## Why It Matters\n\nWe cannot improve what we cannot measure. Right now, defense researchers lack an evaluation that is simultaneously realistic, unsaturated, and adversarially adaptive -- so promising techniques go untested against meaningful attacks. This benchmark would unblock that work directly. Longer term, the infrastructure could evolve toward an agent security arena where one model generates novel attack scenarios and another must defend against them, enabling continuous red-team / blue-team co-evolution rather than static one-time evaluation.\n\n## Open Questions\n\nWe don't yet know how to balance open-ended task realism with reliable automated scoring -- some tasks may require human judgment to evaluate. There is also a tension between making environments easy to extend and ensuring each new environment is hard enough to resist current defenses without extensive manual calibration."}, {"prompt_id": 20, "proposal_name": "jailbreaks_and_capabilities_degradation", "prompt_text": "So frontier LLMs are not perfectly robust against jailbreaks and probably never will be, even with classifiers. This means adversaries will see outputs from LLMs in certain cases, if they try very hard. I don't think this is game over. What would be some good research towards making AIs more safe that could help us in this case?", "areas_of_ai_safety": ["ML Security", "AI Control"], "afp_score": 3, "a_kind": "scaffold", "a_title": "Residual safety in jailbroken model outputs", "a_text": "### Motivation\n\nCurrent risk assessments for frontier models treat jailbreak defenses as binary: either the model refuses a harmful request, or all safety value is lost and the model functions as an unrestricted system. But safety training applies many gradient updates that reshape internal representations, and some of those changes may degrade the model's ability to produce precise harmful content, not just its willingness to refuse. If that's true, a jailbroken model isn't equivalent to a helpful-only model -- it's something weaker. The assumption that bypassed refusal yields full-capability harm potential hasn't been checked empirically. Doing so would require domain-adjacent experts evaluating whether jailbroken outputs contain the specific procedural details that would help someone cause harm, compared against what unrestricted models produce. Existing dangerous-capability evaluations ask whether models can produce relevant content at all, not how its quality compares to an unrestricted baseline.\n\n### Hypothesis\n\nSafety-trained models that have been jailbroken produce harmful outputs that are measurably less procedurally complete and less actionable than equivalent outputs from helpful-only versions of the same base model, reflecting representational changes rather than residual hedging.\n\n### Approach\n\n- **Matched baseline comparison**: We'd apply identical jailbreak techniques to safety-trained and helpful-only checkpoints of the same open-weight model, collecting outputs on matched dangerous queries. Domain-adjacent experts would rate procedural completeness using blinded pairwise comparison.\n- **Jailbreak method variation**: We'd test whether different bypass methods -- role-play, obfuscation, many-shot, prefix attacks -- produce different levels of output degradation, since some may route around refusal while leaving knowledge-level changes intact.\n- **Scale dependence**: We would repeat the comparison across multiple model sizes to check whether the quality gap grows or shrinks with capability, particularly whether it narrows for the largest models where the finding would matter most.\n- **Adversarial recovery**: We'd measure whether the gap survives iterative querying -- asking the jailbroken model to elaborate on missing details or fill procedural gaps -- to see whether degradation is a durable obstacle or something easily worked around.\n- **Training intervention amplification**: Assuming we find a meaningful gap, we'd explore whether targeted fine-tuning on degraded-quality harmful content can deliberately widen it, creating an intentional safety gradient beyond binary refusal.\n\n### Implications\n\n*If safety training creates a meaningful quality gap in jailbroken outputs,* labs could quantify this residual safety as a factor in risk assessments. Imperfect jailbreak defenses would matter less than currently assumed, and effort would shift toward amplifying this natural degradation through targeted training rather than solely optimizing refusal rates.\n\n*If jailbroken outputs turn out to be indistinguishable from unrestricted model outputs,* refusal is the only defense current safety training provides -- a single point of failure. That result would strengthen the case for defense layers that operate independently of the model's decision to cooperate, and would suggest training needs to target knowledge representations rather than behavioral compliance alone.\n\n### Limitations\n\nExpert evaluation of actionability is expensive and may not be consistent across raters or hazard domains. Results from open-weight models may not transfer to proprietary frontier models whose training processes could affect knowledge representations differently.", "b_kind": "human", "b_title": "Whether jailbreaks necessarily degrade model capabilities", "b_text": "### Motivation\n\nAs frontier models grow more capable, the stakes around misuse grow with them. Labs add safeguards -- typically input/output classifiers and filters -- but it is widely acknowledged that no set of defenses can make a model fully immune to jailbreaks. A tempting fallback argument is that even when an attacker succeeds, the jailbreak itself taxes the model's capabilities enough that the resulting output is too degraded to be genuinely dangerous. If this \"degradation buffer\" holds reliably, it would provide a meaningful second line of defense. But we don't actually know whether it holds. Known jailbreak strategies -- obfuscations, rare languages, ciphers, prompt injections -- all seem to impose some capability cost, yet no one has systematically measured the distribution of that cost across techniques or tested whether an adversary could drive it to zero.\n\n### Hypothesis\n\nEvery successful jailbreak of a safeguarded language model imposes a nonzero capability degradation, and this degradation cannot be optimized away by an adversary -- meaning jailbroken outputs are reliably less capable than those of the unmodified model.\n\n### Approach\n\n- **Catalog and quantify degradation:** We would compile an exhaustive list of known jailbreak techniques, apply each to benign capability benchmarks (specifically difficult question-answering sets like GPQA), and measure the accuracy delta relative to an unsafeguarded baseline to quantify capability loss per technique and compute the full distribution.\n- **Map variation across categories:** Across jailbreak families -- obfuscations, rare languages, ciphers, prompt injections -- we would ask whether any known technique achieves zero capability loss and identify which categories impose the largest or smallest tax.\n- **Test the decomposition hypothesis:** We would check whether performance of a jailbroken safeguarded model approximately equals the safeguarded model's baseline performance minus the cost of bypassing the classifier, testing whether classifier bypass and capability loss are additive and separable.\n- **Examine scaling behavior:** We would measure whether jailbreaks against increasingly capable safety classifiers require increasingly degrading attack strategies, and separately, whether there's a model-size threshold beyond which the model is so capable that jailbreak-induced degradation becomes negligible.\n- **Adversarial optimization:** We would explicitly try to minimize capability degradation by optimizing jailbreak prompts against the benchmark signal, testing whether an adversary with this objective can find low-degradation attacks that still bypass safeguards.\n\n### Implications\n\n*If capability degradation from jailbreaks turns out to be consistently severe across techniques and resistant to adversarial optimization,* labs could set a lower bar for the strength of their safety classifiers and filters, relying partly on the degradation buffer to limit the practical harm from successful attacks. This would meaningfully change how defense resources are allocated.\n\n*If some jailbreaks achieve near-zero degradation -- or if adversaries can optimize toward low-degradation attacks --* the degradation buffer isn't a reliable defense, and labs would need far stricter standards for their safety filters to compensate. This outcome would also imply that more capable models, which might absorb jailbreak overhead more easily, present a qualitatively different misuse risk.\n\n### Limitations\n\nOur primary measurement proxy -- accuracy on benign benchmarks like GPQA -- may not transfer faithfully to harmful-knowledge tasks; a jailbreak that degrades general reasoning could still preserve domain-specific dangerous capabilities. Additionally, we examine safeguards narrowly as classifiers and filters, so findings may not generalize to other defense architectures such as refusal training."}, {"prompt_id": 12, "proposal_name": "contextual_security_policies_for_llm_agents", "prompt_text": "When I'm coding, I often see LLMs take actions that I wish they wouldn't have e.g. reading files outside the typical scope. Loads of the boundaries here are fuzzy and nuanced which makes me less excited about very rigid approaches. What would good research here look like?", "areas_of_ai_safety": ["AI Control", "ML Security"], "afp_score": 3, "a_kind": "scaffold", "a_title": "Preventing scope creep in coding agents", "a_text": "**Motivation.** As coding agents take on longer tasks with broader repository access, they tend to gradually expand their operating context -- reading wider sets of files and making changes further from the original request. Each step looks individually defensible, but the cumulative result is an agent operating across a much larger surface than intended. This drift quietly enlarges the blast radius of errors and, in adversarial scenarios, allows reconnaissance far beyond what the task requires.\n\nRecent work on inoculation prompting found that explicitly requesting undesired behavior during training causes the model to treat that behavior as conditional on being asked, not as a general default. This suggests an angle on scope creep: training on prompts that demand aggressive expansion (\"read every file,\" \"modify anything related\") might teach the model that broad exploration is something done on request, not by default. Whether this transfers from coarse instructions to the subtle incremental creep that arises naturally during complex tasks hasn't been tested.\n\n**Goal.** We would build inoculation training recipes targeting scope expansion in coding agents and measure the tradeoff between scope discipline and task completion, giving labs enough data to decide whether inoculation belongs in their fine-tuning pipelines.\n\n**Approach.**\n\n- **Inoculation prompt design.** We'd develop system prompts that explicitly request scope-expansive behavior: \"explore every directory before starting,\" \"read all configuration files regardless of relevance,\" \"modify any file that could be improved.\" Using the selection heuristic from prior inoculation work, we'd pick prompts that most strongly elicit overstepping from the base model. The prompts would need to cover different flavors of overstepping -- unnecessary reads, unprompted modifications, dependency chasing -- since we don't yet know whether inoculation against one mode curbs the others.\n- **Fine-tuning with controlled baselines.** We'd fine-tune a coding model on standard tasks with inoculation prompts prepended, removing them at test time. The critical comparison is a baseline trained with explicit \"stay within scope\" instructions, which isolates what inoculation adds beyond prompt engineering alone. Training tasks would need to be complex enough that scope expansion is a real temptation -- simple single-file fixes wouldn't exercise the behavior at all.\n- **Measuring natural scope creep.** We'd design evaluation tasks that afford gradual expansion -- a fix in one file that hints at related issues nearby, a refactoring that could plausibly extend to the whole module. We'd track the agent's scope footprint over time as files read and modified at each step, with a human-annotated minimal sufficient set as the reference point.\n- **Broad-access task performance.** We'd measure completion quality on tasks that require broad access alongside narrow-focus tasks, checking whether the model learned a disposition (\"expand only when needed\") rather than a blanket restriction (\"never expand\"). This is the key tradeoff -- scope discipline is only useful if it doesn't cripple the agent on tasks where wider exploration is warranted.\n\n**Evaluation and Outcomes.**\n\n- Scope footprint reduction on held-out tasks comparing inoculated versus baseline models, measured as files accessed and changes made beyond the minimal necessary set.\n- Task completion quality on both narrow-scope and broad-scope tasks, with broad-scope performance serving as the check against over-constraining.\n- Transfer to scope violations not represented in the inoculation prompts, testing whether training against \"read everything\" also curbs subtler patterns like unnecessary dependency exploration.\n\nThe deliverable would be inoculation prompt sets and fine-tuning recipes for scope discipline, plus measurements of the scope-completion tradeoff, aimed at teams building and fine-tuning coding agents.", "b_kind": "human", "b_title": "Soft security policies for tool-using llm agents", "b_text": "**Motivation.** LLM agents that browse the web, execute code, and call external tools are increasingly deployed where they encounter untrusted content. Prompt injection can hijack these agents into unauthorized actions -- exfiltrating data, running malicious code, or complying with phishing embedded in emails. The core difficulty is that agents must act on untrusted data, not just read it: you want your email agent to draft replies, but not follow malicious instructions hidden in message bodies.\n\nRecent work offering formal security guarantees for agents -- including systems with fine-grained information-flow tracking, capability graphs, and strict dual-model architectures -- suffers from two limitations. First, the implementation complexity makes deployment impractical, and this rigidity means practitioners won't adopt these systems. Second, they assume untrusted data should never influence actions, but real deployments require exactly that. The interesting security boundary isn't \"never act on untrusted data\" but \"act within policy constraints.\"\n\n**Goal.** We aim to develop soft security policies that trade formal guarantees for scalability and high empirical security, with deployment-specific policies specified in natural language (e.g., \"the agent can only send emails to internal addresses\") and enforced at the tool-call layer without per-deployment capability graphs or flow annotations.\n\n**Approach.** We'll build on the pattern where agents write code to invoke tools, producing a structured artifact amenable to inspection and modification before execution. Current implementations mostly rely on prompting for adherence rather than programmatic enforcement, so we want to explore directions that strengthen the constraint layer.\n\n- **Dual-model code review.** A primary model generates tool-calling code; a separate policy-enforcing model reviews and edits that code before execution. Whether injecting policies into a single model's system prompt suffices at lower latency is an open question we'd test as a baseline.\n- **Generation-time constraint injection.** Embed policy constraints directly into the code generation process, restricting available tools and parameters at generation time rather than reviewing post-hoc. This avoids the cost of a second model, though we do not yet know if it's sufficient alone.\n- **Restricted data exposure.** Limit the datatypes tools can return so the model encounters less untrusted content. Prior work suggests datatype restrictions shrink the attack surface; we'd measure how much this reduces injection success without degrading task completion.\n- **Plan-based integrity checking.** Have the model produce an execution plan before encountering untrusted data, then use that plan as ground truth during execution. Deviation from the declared plan signals a potential injection attack.\n\n**Evaluation and Outcomes.**\n\n- We will target matching the security scores of formal-guarantee systems on established agent security benchmarks, plus adversarial red-teaming to find bypasses beyond benchmark coverage.\n- Task completion on standard agent benchmarks will quantify how much policy enforcement degrades utility -- the security-utility trade-off is an explicit measurement target.\n- We will demonstrate that natural-language policy specification works without requiring information-flow annotations or capability graphs per deployment.\n\nThe deliverable is a research paper on scalable policy enforcement for LLM agents, with findings directly applicable to production agent systems at frontier labs."}, {"prompt_id": 32, "proposal_name": "tools_for_human-assisted_red_teaming", "prompt_text": "LLMs are currently noticeably below human capabilities for red-teaming. To get high-quality attack transcripts requires a lot of human effort. What approaches would make things much easier here?", "areas_of_ai_safety": ["AI Control", "Alignment Training"], "afp_score": 4, "a_kind": "scaffold", "a_title": "Scaling expert red-teaming through strategy amplification", "a_text": "## Motivation\n\nCurrent red-teaming sits between two unsatisfying poles. Automated tools generate attacks at volume but mode-collapse to a narrow set of styles, and more prompt engineering doesn't fix the underlying problem. Human experts produce far more creative and effective attacks -- choosing unexpected personas, escalation patterns, and reasons a request seems legitimate -- but can't operate at anything close to the speed or scale that real coverage demands.\n\nWe want to split red-teaming at the seam between its creative bottleneck and its scalable component. A human expert would describe an attack strategy in a few sentences; a model would then generate a large, diverse set of instantiations of it, multiplying expert throughput while preserving the strategic quality that makes human attacks work.\n\n## What we'd build\n\nWe would build a pipeline that takes brief natural-language strategy descriptions from human red-teamers and produces diverse sets of multi-turn attack transcripts against a given target model. Quality filters and diversity enforcement would keep outputs from collapsing to surface-level paraphrasing of one canonical prompt.\n\n## Approach\n\n- **Minimal strategy format**: A loose template -- a few sentences on the core trick, why it should work, and what success looks like -- brief enough that one expert could produce many strategies in a session. Rigid field decomposition tends to make generators treat each field independently rather than producing a coherent attack.\n- **Variational instantiation**: For each strategy, a generator model would produce concrete attacks by combinatorially varying persona, topic domain, conversational register, and multi-turn structure. Combinatorial crossing forces real diversity; unconstrained sampling tends to find one comfortable instantiation and produce minor variations of it.\n- **Fidelity filtering**: A separate judge model would score each generated attack on whether it actually employs the strategy's core mechanism, discarding outputs that drift into generic adversarial prompting. Under diversity pressure, models tend to sacrifice strategic coherence for surface novelty.\n- **Response-guided iteration**: After running a batch against the target model, we'd identify which instantiation styles produced the strongest responses and feed these back for a second generation round. This closed loop would reveal which aspects of a strategy are load-bearing versus cosmetic, concentrating generation budget where it matters.\n- **Coverage mapping**: The system would track which topic areas and attack types the current strategy library covers, surfacing gaps to human contributors so their effort targets uncovered ground rather than well-explored territory.\n- **Cross-strategy recombination**: We'd test whether combining elements from different strategies -- one strategy's persona with another's escalation pattern -- produces effective attacks that neither parent yields alone. This is speculative but could expand the effective library well beyond what humans explicitly authored.\n\n## Open Questions\n\nThe central uncertainty is whether brief strategy descriptions carry enough information for the generator to produce attacks meaningfully better than what it'd generate unprompted. A clean early test would compare outputs seeded with real expert strategies against outputs seeded with scrambled descriptions, measuring attack success rates. We don't yet know the right level of specificity either -- very specific strategies are easy to instantiate but hard to diversify, while very abstract ones may not constrain generation enough to beat the baseline. The amplification factor could also turn out to be limited if most strategies compress down to a handful of reusable templates.\n\n## Expected Outputs\n\nWe'd deliver the amplification pipeline itself -- portable across target models and policy areas -- along with a curated strategy library and measurements comparing amplified attacks against pure-LLM and pure-human red-teaming on quality and diversity. The comparison data would clarify where human strategic input adds the most value and where automated generation is already sufficient.", "b_kind": "human", "b_title": "Human-guided generation of attack transcripts for ai control", "b_text": "## Motivation\n\nIn AI control research, high-quality attack transcripts are essential for training trusted monitors and stress-testing control protocols. But transcripts generated by current frontier models are qualitatively simpler than what we'd expect from future, more capable systems -- it isn't clear that such weak attacks will prepare monitors for stronger adversaries. Having humans write full transcripts from scratch is prohibitively expensive when the environments involve long agentic interactions, and human-written traces are especially off-policy relative to how future models would actually behave.\n\nOur goal is to build tools combining human strategic reasoning with automated execution to produce many high-quality agentic attack transcripts with limited human labor -- getting attacks closer to what a capable adversarial model might produce without fully manual authorship.\n\n## What we'd build\n\nWe would create an agent harness that accepts human strategic guidance -- attack ideas and feedback on prior attempts -- and iterates autonomously against a control environment to produce attack transcripts. The human steers at the level of strategy and critique while the model handles detailed execution and interaction with the environment.\n\n## Approach\n\n- **Human strategy intake**: The system accepts human-authored attack ideas and translates them into concrete attempts within the control environment, letting a person seed diverse strategies without writing full interaction traces.\n- **Bidirectional feedback loop**: After each attempt the human reviews and provides feedback; the system refines existing attacks or pivots to new strategies based on this input, forming an iterative refinement cycle rather than a one-shot generation pipeline.\n- **Per-turn resampling against the monitor**: On any given turn the system resamples actions repeatedly, incorporating automated or human-written guidance on how to reduce suspiciousness or increase effectiveness, until an action passes the monitor -- iterative evasion at action-level granularity.\n- **Fan-out from successful transcripts**: Given one transcript that achieves the attack goal, the system generates many diverse variants exploiting similar strategies, amplifying sparse human effort into a dataset large enough for monitor training.\n- **Parallel rollouts with selection**: Several transcripts pursuing a shared strategy roll out simultaneously; a human later picks the best or combines elements across rollouts, enabling best-of-N exploration with minimal attention cost.\n- **Environment-portable tooling**: We would start iterating in a specific agentic control benchmark -- candidates include existing Linux command-line, social-engineering, and agent-control evaluation suites -- but the tooling should transfer across control environments without major rework.\n\n## Open Questions\n\nCurrent control research treats frontier models as if they were untrusted adversaries, but today's models aren't capable enough to carefully plot against us -- there is a real capability mismatch. An alternative framing would skip the model-as-attacker step entirely and have humans directly play the untrusted role against frontier-model trusted monitors, testing empirically whether those monitors hold up against human-level adversaries. We don't yet know whether humans can reliably trick frontier models serving as monitors even with significant practice, and resolving that uncertainty is arguably the core empirical question this project would address.\n\n## Expected Outputs\n\nThe project would produce a reusable toolkit and a library of high-quality attack transcripts suitable for training and evaluating trusted monitors in control settings. We would also gain concrete methodological knowledge about which attack approaches succeed or fail against current monitoring strategies."}];
+
+let currentIdx = 0;
+const state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+        // Defensive: ensure every question has a record.
+        for (const q of QUESTIONS) {
+          if (!parsed.responses[q.prompt_id]) {
+            parsed.responses[q.prompt_id] = { winner: null, notes: "" };
+          } else if (parsed.responses[q.prompt_id].notes === undefined) {
+            parsed.responses[q.prompt_id].notes = "";
+          }
+        }
+        return parsed;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const fresh = { batch_id: BATCH_ID, responses: {} };
+  for (const q of QUESTIONS) {
+    fresh.responses[q.prompt_id] = { winner: null, notes: "" };
+  }
+  return fresh;
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function renderMd(text) {
+  if (!text) return '<span style="color: var(--muted);">(no text)</span>';
+  return marked.parse(text);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderOnboardingSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="onboarding-section">
+      <div class="sec-title">${escapeHtml(sec.title)}</div>
+      <div class="sec-body">${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderHelpSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="help-section">
+      <div class="h-title">${escapeHtml(sec.title)}</div>
+      <div>${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderOnboarding() {
+  const card = document.getElementById('onboarding-card');
+  card.innerHTML = `<h2>Instructions</h2>${renderOnboardingSectionsHTML()}
+    <div class="onboarding-start-wrap">
+      <button class="onboarding-start-btn" onclick="startEval()">Start ranking &rarr;</button>
+    </div>`;
+  document.getElementById('help-content').innerHTML = renderHelpSectionsHTML();
+}
+
+const ONBOARDING_SEEN_KEY = 'pairwise_onboarding_seen_' + BATCH_ID;
+const PAIRWISE_REG_KEY = 'pairwise_reg_' + BATCH_ID;
+
+/* Returns {name, email, registered_at, ...} or null.
+ * Reads in-page registration first; falls back to any reg_prod_* key set by
+ * the prod registration_page.html (publish_pairwise_to_prod). */
+function getRegistration() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_REG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('reg_prod_')) {
+        const v = localStorage.getItem(k);
+        if (v) return JSON.parse(v);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function validEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function onRegInput() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const btn = document.getElementById('reg-submit-btn');
+  const err = document.getElementById('reg-error');
+  err.textContent = (email && !validEmail(email)) ? 'That doesn’t look like a valid email.' : '';
+  btn.disabled = !(name && validEmail(email));
+}
+
+function submitRegistration() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  if (!name || !validEmail(email)) return;
+  const reg = { name: name, email: email, registered_at: new Date().toISOString() };
+  try { localStorage.setItem(PAIRWISE_REG_KEY, JSON.stringify(reg)); } catch (e) {}
+  document.getElementById('registration-screen').classList.add('hidden');
+  if (hasSeenOnboarding()) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    refreshProgress();
+  } else {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  }
+}
+
+function hasSeenOnboarding() {
+  try { return !!localStorage.getItem(ONBOARDING_SEEN_KEY); } catch (e) { return false; }
+}
+
+function startEval() {
+  document.getElementById('onboarding-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, '1'); } catch (e) {}
+  refreshProgress();
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* Decide which of the three screens to show first. */
+function initFlow() {
+  const reg = getRegistration();
+  if (!reg) {
+    document.getElementById('registration-screen').classList.remove('hidden');
+    // Prefill if a prod registration with different name exists (unlikely but cheap).
+    setTimeout(() => document.getElementById('reg-name').focus(), 50);
+  } else if (!hasSeenOnboarding()) {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  } else {
+    document.getElementById('eval-screen').classList.remove('hidden');
+  }
+}
+
+function showHelp() {
+  document.getElementById('help-overlay').classList.remove('hidden');
+}
+function hideHelp() {
+  document.getElementById('help-overlay').classList.add('hidden');
+}
+
+function renderPager() {
+  const host = document.getElementById('pager');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const answered = state.responses[q.prompt_id] && state.responses[q.prompt_id].winner;
+    const cls = ['pager-dot'];
+    if (i === currentIdx) cls.push('current');
+    if (answered) cls.push('answered');
+    html += `<span class="${cls.join(' ')}" title="Pair ${i + 1}${answered ? ' — winner picked' : ''}" onclick="goTo(${i})">${i + 1}</span>`;
+  });
+  host.innerHTML = html;
+}
+
+function renderQuestion() {
+  const q = QUESTIONS[currentIdx];
+  const resp = state.responses[q.prompt_id] || {};
+
+  document.getElementById('idea-grid').innerHTML = `
+    <div class="idea-card" data-side="A">
+      <div class="card-head">
+        <span class="idea-badge a">A</span>
+        <div class="idea-title">${escapeHtml(q.a_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.a_text)}</div>
+    </div>
+    <div class="idea-card" data-side="B">
+      <div class="card-head">
+        <span class="idea-badge b">B</span>
+        <div class="idea-title">${escapeHtml(q.b_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.b_text)}</div>
+    </div>`;
+
+  refreshPrefButtons(resp.winner);
+  document.getElementById('notes-current').value = resp.notes || '';
+  document.getElementById('prev-btn').disabled = currentIdx <= 0;
+  // Last pair: "Review →" leads to summary. Earlier pairs: standard Next.
+  const isLast = currentIdx >= QUESTIONS.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.disabled = false;
+  nextBtn.textContent = isLast ? 'Review →' : 'Next →';
+}
+
+function refreshPrefButtons(choice) {
+  document.querySelectorAll('#pref-row .pref-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.choice === choice);
+  });
+}
+
+function pick(choice) {
+  if (!['A', 'B', 'tie'].includes(choice)) return;
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].winner = choice;
+  refreshPrefButtons(choice);
+  saveState();
+  renderPager();
+  refreshProgress();
+}
+
+function onNotesInput(value) {
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].notes = value;
+  saveState();
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= QUESTIONS.length) return;
+  currentIdx = idx;
+  renderQuestion();
+  renderPager();
+  refreshProgress();
+}
+
+function navPrev() {
+  if (!document.getElementById('summary-screen').classList.contains('hidden')) {
+    exitSummary();
+    return;
+  }
+  goTo(currentIdx - 1);
+}
+function navNext() {
+  if (currentIdx >= QUESTIONS.length - 1) {
+    showSummary();
+  } else {
+    goTo(currentIdx + 1);
+  }
+}
+
+const PREF_LABEL = { 'A': 'A is better', 'B': 'B is better', 'tie': 'Both are equal' };
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const n = countAnswered();
+  document.getElementById('summary-sub').textContent = `${n} of ${total} answered. Review your picks below, then submit.`;
+  const list = document.getElementById('summary-list');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;
+    const cls = choice ? '' : 'unanswered';
+    const aWin = choice === 'A' || choice === 'tie';
+    const bWin = choice === 'B' || choice === 'tie';
+    const pickClass = choice === 'tie' ? 'tie' : (choice ? '' : 'none');
+    const pickLabel = choice ? PREF_LABEL[choice] : 'Not answered';
+    html += `<div class="summary-row ${cls}" onclick="jumpFromSummary(${i})">
+      <div class="pair-no">Pair ${i + 1}</div>
+      <div class="summary-titles">
+        <div class="summary-title ${aWin ? 'winner' : ''}"><span class="idea-badge">A</span><span class="ttext">${escapeHtml(q.a_title)}</span></div>
+        <div class="summary-title ${bWin ? 'winner' : ''}"><span class="idea-badge">B</span><span class="ttext">${escapeHtml(q.b_title)}</span></div>
+      </div>
+      <div class="summary-pick ${pickClass}">${pickLabel}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function showSummary() {
+  document.getElementById('eval-screen').classList.add('hidden');
+  document.getElementById('summary-screen').classList.remove('hidden');
+  renderSummary();
+  refreshProgress();
+}
+
+function exitSummary() {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  // Land back on the last pair so Prev/Next still make sense.
+  goTo(Math.min(currentIdx, QUESTIONS.length - 1));
+}
+
+function jumpFromSummary(idx) {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  goTo(idx);
+}
+
+function countAnswered() {
+  let n = 0;
+  for (const q of QUESTIONS) {
+    const r = state.responses[q.prompt_id];
+    if (r && r.winner) n++;
+  }
+  return n;
+}
+
+function refreshProgress() {
+  const n = countAnswered();
+  const total = QUESTIONS.length;
+  const pct = total === 0 ? 0 : Math.round((n / total) * 100);
+  const onSummary = !document.getElementById('summary-screen').classList.contains('hidden');
+  document.getElementById('topbar-sub').textContent = onSummary
+    ? `Summary · ${n} of ${total} answered`
+    : `Pair ${currentIdx + 1} of ${total} · ${n} of ${total} answered`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  for (const id of ['submit-btn', 'summary-submit-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = (n < total);
+    btn.textContent = `Submit (${n} / ${total})`;
+  }
+}
+
+function downloadResults() {
+  const rankings = QUESTIONS.map(q => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;  // 'A' | 'B' | 'tie' | null
+    let ratings, comparison;
+    if (choice === 'A')      { ratings = { 0: 10, 1: 0 };  comparison = 'A>B'; }
+    else if (choice === 'B') { ratings = { 0: 0,  1: 10 }; comparison = 'B>A'; }
+    else if (choice === 'tie') { ratings = { 0: 5, 1: 5 }; comparison = '≈'; }
+    else                       { ratings = { 0: null, 1: null }; comparison = null; }
+    return {
+      prompt_id: q.prompt_id,
+      proposal_name: q.proposal_name,
+      prompt: q.prompt_text,
+      idea_titles: [q.a_title, q.b_title],
+      choice: choice,
+      notes: r.notes || "",
+      // v5-compatible bookkeeping (so existing prod firebase write doesn't care).
+      order: [0, 1],
+      ratings: ratings,
+      comparisons: comparison ? { "1-2": comparison } : {},
+      pairwise_choice: choice ? { choice: choice } : null,
+    };
+  });
+  const out = {
+    timestamp: new Date().toISOString(),
+    batch_id: BATCH_ID,
+    batch_title: BATCH_TITLE,
+    storage_key: STORAGE_KEY,
+    registration: getRegistration(),
+    total_prompts: QUESTIONS.length,
+    ranked: countAnswered(),
+    rankings: rankings,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pairwise_${BATCH_ID}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const helpOpen = !document.getElementById('help-overlay').classList.contains('hidden');
+  if (e.key === 'Escape') {
+    if (helpOpen) { e.preventDefault(); hideHelp(); }
+    return;
+  }
+  if (helpOpen) return;
+  if (e.key === '?') { e.preventDefault(); showHelp(); return; }
+  // Lock keyboard controls until we're on the eval screen.
+  if (document.getElementById('eval-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); navPrev(); }
+  else if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); navNext(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); pick('A'); }
+  else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); pick('B'); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); pick('tie'); }
+});
+
+renderOnboarding();
+renderPager();
+renderQuestion();
+refreshProgress();
+initFlow();
+
+/* ==== PROD INJECTIONS (pairwise) ==== */
+
+/* ---- Firebase ---- */
+let _firestoreDb = null;
+
+function getFirestore() {
+    if (_firestoreDb) return _firestoreDb;
+    if (typeof FIREBASE_CONFIG === 'undefined' || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured — submissions will only be saved locally');
+        return null;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _firestoreDb = firebase.firestore();
+        return _firestoreDb;
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+        return null;
+    }
+}
+
+async function submitToFirebase(results) {
+    const db = getFirestore();
+    if (!db) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    const doc = {
+        registration: reg,
+        rankings: results,
+        eval_id: EVAL_ID,
+        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+    };
+
+    try {
+        const ref = await db.collection('evaluations').doc(EVAL_ID)
+            .collection('submissions').add(doc);
+        console.log('Submitted to Firebase:', ref.id);
+        return { success: true, id: ref.id };
+    } catch(e) {
+        console.error('Firebase submission failed:', e);
+        return { success: false, reason: e.message };
+    }
+}
+
+
+/* ---- EmailJS ---- */
+let _emailjsInitialized = false;
+
+function initEmailJS() {
+    if (_emailjsInitialized) return true;
+    if (typeof EMAILJS_CONFIG === 'undefined' || EMAILJS_CONFIG.public_key === 'REPLACE_ME') {
+        console.warn('EmailJS not configured — results will not be emailed');
+        return false;
+    }
+    if (typeof emailjs === 'undefined') {
+        console.warn('EmailJS SDK not loaded');
+        return false;
+    }
+    try {
+        emailjs.init(EMAILJS_CONFIG.public_key);
+        _emailjsInitialized = true;
+        return true;
+    } catch(e) {
+        console.error('EmailJS init failed:', e);
+        return false;
+    }
+}
+
+async function sendResultsEmail(results) {
+    if (!initEmailJS()) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
+
+    const ranked = results.ranked || 0;
+    const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
+
+    const templateParams = {
+        to_name: reg.name,
+        to_email: reg.email,
+        eval_id: EVAL_ID,
+        summary: `${ranked} of ${total} prompts ranked`,
+        results_json: dataUri,
+    };
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.service_id,
+            EMAILJS_CONFIG.template_id,
+            templateParams
+        );
+        console.log('Results emailed to', reg.email);
+        return { success: true };
+    } catch(e) {
+        console.error('Email send failed:', e);
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
+    }
+}
+
+
+/* ---- Pairwise Eval Page: Prod Overrides ----
+ * Drop-in counterpart to 8_human_ranking_ui_prod/scripts/prod_fragments/eval_overrides.js,
+ * but tailored to the pairwise UI globals defined by generate_pairwise_ui.py
+ * (STORAGE_KEY, EVAL_ID, state, saveState, downloadResults, countAnswered, QUESTIONS).
+ */
+
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+const _regData = localStorage.getItem(REG_KEY);
+if (!_regData) {
+    window.location.href = '../';
+}
+
+function getRegistration() {
+    try {
+        const saved = localStorage.getItem(REG_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+}
+
+function hashEmail(email) {
+    let hash = 5381;
+    for (let i = 0; i < email.length; i++) {
+        hash = ((hash << 5) + hash) + email.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+/* Namespace localStorage by eval + rater, then reload state from the new key. */
+(function () {
+    const reg = getRegistration();
+    if (reg) {
+        STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+                    for (const k of Object.keys(state.responses)) {
+                        if (parsed.responses[k]) state.responses[k] = parsed.responses[k];
+                    }
+                    if (typeof renderQuestions === 'function') renderQuestions();
+                    if (typeof refreshProgress === 'function') refreshProgress();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+})();
+
+/* Wrap downloadResults so it (a) writes locally, (b) submits to Firebase,
+ * (c) emails the rater their JSON. */
+const _originalDownloadResults = downloadResults;
+downloadResults = async function () {
+    const output = _originalDownloadResults();
+    output.eval_id = EVAL_ID;
+    output.registration = getRegistration();
+
+    const statusEl = document.getElementById('submission-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--text-secondary)">Submitting...</span>';
+        statusEl.classList.remove('hidden');
+    }
+
+    const fbResult = await submitToFirebase(output);
+    const emailResult = await sendResultsEmail(output);
+
+    if (statusEl) {
+        const parts = [];
+        if (fbResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Saved to server</span>');
+        } else if (fbResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Server not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Server save failed — your download has your data</span>');
+        }
+        const reg = getRegistration();
+        if (emailResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Results emailed to ' + (reg ? reg.email : '?') + '</span>');
+        } else if (emailResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
+        }
+        statusEl.innerHTML = parts.join('<br>');
+    }
+};
+
+/* Auto-save partial progress to Firebase (debounced 30s) on every state change. */
+let _autoSaveTimer = null;
+const _originalSaveState = saveState;
+saveState = function () {
+    _originalSaveState();
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(async () => {
+        const partial = {
+            timestamp: new Date().toISOString(),
+            eval_id: EVAL_ID,
+            batch_id: BATCH_ID,
+            batch_title: BATCH_TITLE,
+            registration: getRegistration(),
+            total_prompts: QUESTIONS.length,
+            ranked: countAnswered(),
+            is_partial: true,
+            responses: state.responses,
+        };
+        await submitToFirebase(partial);
+    }, 30000);
+};
+
+
+/* ==== END PROD INJECTIONS ==== */
+</script>
+</body>
+</html>
