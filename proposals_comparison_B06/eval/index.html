@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairwise Idea Preference — Probes, reliability, behavior measurement</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #9C4A2D;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --muted: #999999;
+    --border: #E0DDD4;
+    --row-hover: #FAFAF7;
+    --accent-soft: #FDF2EC;
+    --gold: #C99C2C;
+    --gold-dark: #92400E;
+    --gold-bg: #FEF3C7;
+    --gold-soft: #FEF7E0;
+    --success: #2D8F6F;
+    --success-hover: #226E55;
+    --success-bg: #D1FAE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+}
+.app {
+    display: flex; flex-direction: column;
+    height: 100vh; max-width: 1600px; margin: 0 auto;
+    padding: 10px 16px 10px 16px;
+    gap: 10px;
+}
+.hidden { display: none !important; }
+
+/* Compact topbar */
+.topbar {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 10px;
+}
+.topbar-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.topbar-sub { font-size: 0.78rem; opacity: 0.92; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.topbar-progress {
+    width: 240px; height: 6px; background: rgba(255,255,255,0.25);
+    border-radius: 10px; overflow: hidden;
+}
+.topbar-progress-fill { background: white; height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+.topbar-help {
+    background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+}
+.topbar-help:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.5); }
+
+/* Registration screen — collected before onboarding */
+.registration-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 32px;
+}
+.registration-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 30px 36px; max-width: 480px; width: 100%;
+}
+.registration-card h2 { color: var(--primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 18px; }
+.registration-card .intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 20px; line-height: 1.55; }
+.reg-field { margin-bottom: 14px; }
+.reg-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 5px; }
+.reg-field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.95rem;
+}
+.reg-field input:focus { outline: none; border-color: var(--primary); }
+.reg-error { color: var(--primary); font-size: 0.82rem; margin-top: 4px; min-height: 1em; }
+.reg-foot { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.reg-submit-wrap { margin-top: 20px; text-align: center; }
+.reg-submit-btn {
+    background: var(--primary); color: white; border: 1px solid var(--primary);
+    padding: 11px 28px; border-radius: 8px;
+    font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.reg-submit-btn:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.reg-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Onboarding screen (scrolls) */
+.onboarding-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center;
+}
+.onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 820px; width: 100%;
+    margin: 4px auto 20px auto;
+    height: max-content;
+}
+.onboarding-card h2 {
+    color: var(--primary); font-size: 1.3rem; font-weight: 700;
+    margin-bottom: 18px;
+}
+.onboarding-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.onboarding-section:first-of-type { border-top: none; padding-top: 4px; }
+.onboarding-section .sec-title {
+    font-weight: 700; color: var(--text);
+    font-size: 1rem; margin-bottom: 4px;
+}
+.onboarding-section .sec-body { color: var(--text); font-size: 0.94rem; line-height: 1.7; }
+.onboarding-section .sec-body p { margin: 6px 0; }
+.onboarding-section .sec-body ul, .onboarding-section .sec-body ol { margin: 6px 0 6px 22px; }
+.onboarding-section .sec-body li { margin: 3px 0; }
+.onboarding-section .sec-body code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
+.onboarding-section .sec-body a { color: var(--primary); }
+
+/* Eval screen: flex column filling remaining viewport. */
+.eval-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Idea grid: fills remaining vertical space; each card scrolls internally. */
+.idea-grid {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.idea-card {
+    background: var(--row-hover);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.idea-card .card-head {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.5);
+}
+.idea-card .idea-title { font-size: 0.98rem; font-weight: 700; color: var(--text); flex: 1; min-width: 0; }
+.idea-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 10px 16px 14px 16px;
+    font-size: 0.88rem; line-height: 1.6; color: var(--text);
+}
+.idea-body p { margin: 5px 0; }
+.idea-body ul, .idea-body ol { margin: 5px 0 5px 20px; }
+.idea-body li { margin: 2px 0; }
+.idea-body strong { color: var(--text); }
+.idea-body h1, .idea-body h2, .idea-body h3, .idea-body h4 {
+    font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 10px 0 4px 0;
+}
+.idea-body h1:first-child, .idea-body h2:first-child, .idea-body h3:first-child, .idea-body h4:first-child { margin-top: 0; }
+
+.idea-badge {
+    display: inline-block;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 1px;
+    padding: 2px 9px; border-radius: 4px;
+    background: var(--success); color: white;
+}
+
+/* Preference button row: A is better / Both equal / B is better */
+.pref-row {
+    flex: none;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px;
+}
+.pref-btn {
+    background: var(--surface); color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pref-btn:hover { border-color: var(--success); color: var(--success); }
+.pref-btn.selected {
+    background: var(--success); border-color: var(--success); color: white;
+    box-shadow: 0 2px 8px rgba(45, 143, 111, 0.25);
+}
+.pref-btn.selected:hover { background: var(--success-hover); border-color: var(--success-hover); color: white; }
+
+/* Tie button uses a neutral grey instead of green to avoid implying preference. */
+.pref-btn[data-choice="tie"]:hover { border-color: #6B7280; color: #6B7280; }
+.pref-btn[data-choice="tie"].selected {
+    background: #6B7280; border-color: #6B7280; color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.25);
+}
+.pref-btn[data-choice="tie"].selected:hover { background: #4B5563; border-color: #4B5563; color: white; }
+.pref-btn .kbd-mini {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-secondary);
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+.pref-btn.selected .kbd-mini { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: white; }
+
+/* Inline notes textarea, single row in the bottom band */
+.notes-row {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px;
+}
+.notes-row label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; flex: none; }
+.notes-row textarea {
+    flex: 1; min-height: 28px; max-height: 70px; resize: vertical;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+}
+.notes-row textarea:focus { outline: none; border-color: var(--primary); }
+
+/* Bottom nav: prev / pager dots / submit / next */
+.nav-bar {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px;
+}
+.pager-dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pager-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 0.74rem; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+}
+.pager-dot:hover { border-color: var(--primary); color: var(--primary); }
+.pager-dot.current { background: var(--primary); border-color: var(--primary); color: white; }
+.pager-dot.answered { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pager-dot.current.answered { background: var(--success); border-color: var(--success); color: white; }
+.nav-side { display: flex; align-items: center; gap: 6px; }
+
+.btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+.btn.btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+.btn.btn-primary:disabled { background: var(--primary); border-color: var(--primary); color: white; opacity: 0.4; }
+
+.kbd { display: inline-block; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; }
+
+/* Summary screen — review picks before submitting */
+.summary-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.summary-header {
+    flex: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+}
+.summary-header h2 { color: var(--primary); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.summary-header .sub { color: var(--text-secondary); font-size: 0.88rem; }
+.summary-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.summary-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+    display: grid; grid-template-columns: 60px 1fr 160px; gap: 12px; align-items: center;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+}
+.summary-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(193, 95, 60, 0.06); }
+.summary-row.unanswered { border-color: #E0B4A8; background: #FBEEE8; }
+.summary-row .pair-no { font-size: 0.78rem; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; text-transform: uppercase; }
+.summary-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.summary-title {
+    display: flex; gap: 8px; align-items: baseline; min-width: 0;
+    font-size: 0.88rem; color: var(--text-secondary);
+}
+.summary-title .idea-badge { flex: none; }
+.summary-title .ttext {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-title.winner { color: var(--text); font-weight: 600; }
+.summary-title.winner .ttext { color: var(--text); }
+.summary-pick {
+    text-align: center; font-size: 0.85rem; font-weight: 700;
+    padding: 6px 10px; border-radius: 6px;
+    background: var(--success); color: white;
+    white-space: nowrap;
+}
+.summary-pick.tie { background: #6B7280; }
+.summary-pick.none { background: #F4F3EE; color: #B25C46; border: 1px dashed #D49A8B; font-weight: 600; }
+
+/* Onboarding screen start button */
+.onboarding-start-wrap { margin-top: 24px; text-align: center; }
+.onboarding-start-btn {
+    background: var(--primary); color: white;
+    border: 1px solid var(--primary);
+    padding: 12px 32px; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.onboarding-start-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* Help overlay (reused from v5 style) */
+.help-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.help-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 780px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    position: relative;
+    font-size: 0.95rem; line-height: 1.7;
+}
+.help-modal h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: 16px; }
+.help-modal .help-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.help-modal .help-section:first-of-type { border-top: none; padding-top: 4px; }
+.help-modal .help-section .h-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.help-modal .help-section a { color: var(--primary); }
+.help-modal .help-section code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.help-modal img { max-width: 100%; height: auto; }
+.help-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    color: var(--text-secondary); padding: 4px 10px;
+    line-height: 1;
+}
+.help-close:hover { color: var(--text); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D5D2C9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ---- Prod: Submission Status ---- */
+#submission-status {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Probes, reliability, behavior measurement</div>
+      <div class="topbar-sub" id="topbar-sub">3 pairs · 0 winners picked</div>
+    </div>
+    <div class="topbar-progress"><div class="topbar-progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    <button class="topbar-help" onclick="showHelp()">? Help</button>
+  </div>
+
+  <div id="registration-screen" class="registration-screen hidden">
+    <div class="registration-card">
+      <h2>Before we start</h2>
+      <div class="reg-field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" type="text" autocomplete="name" oninput="onRegInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('reg-email').focus();}">
+      </div>
+      <div class="reg-field">
+        <label for="reg-email">Email</label>
+        <input id="reg-email" type="email" autocomplete="email" oninput="onRegInput()" onkeydown="if(event.key==='Enter')submitRegistration()">
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+      <div class="reg-submit-wrap">
+        <button class="reg-submit-btn" id="reg-submit-btn" disabled onclick="submitRegistration()">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card" id="onboarding-card"></div>
+  </div>
+
+  <div id="eval-screen" class="eval-screen hidden">
+    <div class="idea-grid" id="idea-grid"></div>
+
+    <div class="pref-row" id="pref-row">
+      <button class="pref-btn" data-choice="A" onclick="pick('A')">A is better <span class="kbd-mini">A</span></button>
+      <button class="pref-btn" data-choice="tie" onclick="pick('tie')">Both are equal <span class="kbd-mini">E</span></button>
+      <button class="pref-btn" data-choice="B" onclick="pick('B')">B is better <span class="kbd-mini">B</span></button>
+    </div>
+
+    <div class="notes-row">
+      <label for="notes-current">Optional — justify your decision</label>
+      <textarea id="notes-current" placeholder="A short note helps a lot when we read these later." oninput="onNotesInput(this.value)"></textarea>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" id="prev-btn" onclick="navPrev()">&larr; Prev</button>
+        <button class="btn" id="next-btn" onclick="navNext()">Next &rarr;</button>
+      </div>
+      <div class="pager-dots" id="pager"></div>
+      <div class="nav-side">
+        <span style="font-size:0.75rem; color: var(--text-secondary);"><span class="kbd">A</span>/<span class="kbd">E</span>/<span class="kbd">B</span> pick · <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+        <button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0 ranked)</button>
+            <div id="submission-status" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-screen" class="summary-screen hidden">
+    <div class="summary-header">
+      <h2>Review your picks</h2>
+      <div class="sub" id="summary-sub"></div>
+    </div>
+    <div class="summary-list" id="summary-list"></div>
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" onclick="exitSummary()">&larr; Back to pairs</button>
+      </div>
+      <div style="font-size:0.78rem; color: var(--text-secondary);">Click a row to revise that pair.</div>
+      <div class="nav-side">
+        <button class="btn btn-primary" id="summary-submit-btn" disabled onclick="downloadResults()">Submit (0 / 0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help-overlay" class="help-overlay hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="help-modal">
+    <button class="help-close" onclick="hideHelp()" aria-label="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div id="help-content"></div>
+  </div>
+</div>
+<script>
+let STORAGE_KEY = 'rankings_prod_proposals_comparison_B06_default';
+const EVAL_ID = 'proposals_comparison_B06';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const EMAILJS_CONFIG = {"service_id": "service_sdkgwjx", "template_id": "template_pztjzon", "public_key": "USnRousNcwC1uAee-"};
+const BATCH_ID = "B06_probes_reliability";
+const BATCH_TITLE = "Probes, reliability, behavior measurement";
+const ONBOARDING_SECTIONS = [{"title": "Before You Begin", "body": "You are comparing pairs of AI safety research ideas. In each pair, two ideas — labelled **A** and **B** — were written in response to the same research prompt. You don't know which is which: one is from a human researcher and one is AI-generated. Your job is to pick the one you'd rather see pursued in an [Anthropic Fellows Program](https://alignment.anthropic.com/2025/anthropic-fellows-program-2026/) (AFP) project.\n\nFacts about the Anthropic Fellows Program (for context on what's pursuable):\n\n* 4 months\n* 2 fellows per project\n* $15k/month compute budget each\n* Unlimited access to the Claude API, but no access to internal tooling or data\n\nIf you are less familiar with the sort of empirical technical alignment research done by Anthropic's Fellows Program, skim [https://alignment.anthropic.com/](https://alignment.anthropic.com/) and come back."}, {"title": "Scope vs Quality", "body": "Ideas don't need to fit the 4-month window perfectly — scope can be adjusted afterwards. What matters is whether the underlying research taste is good: whether fleshing the idea out would uncover research questions and experiments worth pursuing, and ultimately make Transformative AI go well.\n\nThe info that conveys taste should already be present in the idea."}, {"title": "How to choose between A and B", "body": "A useful framework:\n\n1. Read the prompt and categorise what sub-area this is about (AI control, scalable oversight, alignment training, CoT monitorability, adversarial robustness, alignment auditing agents, …).\n2. Think briefly about what good work in that sub-area would look like — what matters, what's hard, what would actually move the needle.\n3. Click the idea you'd rather see pursued. If you are unsure, you can select **Both are equal**."}, {"title": "Using the interface", "body": "One pair per page. Use the three buttons under the cards to record your call: **A is better**, **Both are equal**, or **B is better** — the selected button turns green (grey for \"equal\"). You can change your mind any time. Use the **Prev** / **Next** buttons or arrow keys to move between pairs; press **A**, **E**, or **B** to pick from the keyboard. The **Submit** button unlocks once every pair has an answer."}];
+const QUESTIONS = [{"prompt_id": 24, "proposal_name": "production_ready_probes", "prompt_text": "Linear probes have shown to be a cost efficient way to do monitoring, and are directly being used. I want research that really helps us get the most out of this. There are a bunch of decisions being made that we need good research to help us decide between. What does good research look like here?", "areas_of_ai_safety": ["Alignment"], "afp_score": 4, "comparison_type": "scaffold_vs_human", "a_kind": "scaffold", "a_title": "Activation probe reliability under adaptive pressure", "a_text": "### Motivation\n\nLinear probes trained on a model's own activations have recently entered production monitoring cascades, where they catch unsafe requests at a small fraction of normal classifier cost. But published evaluations of these probes test them only against attacks designed without knowledge of the probe itself. In real deployment, a sophisticated actor -- or a scheming model with implicit access to its own representations -- could optimize against the probe directly. Whether probes retain meaningful detection power under this kind of adaptive pressure is the key open question for teams deciding if probes deserve a load-bearing safety role or should serve only as a lightweight pre-filter.\n\n### Approach\n\n1. **Gradient-based evasion under joint constraints.** We'd train EMA and suffix probes on open-weight instruction-tuned models for jailbreak detection, then mount gradient-based adversarial optimization that jointly maximizes harmful-output likelihood and minimizes probe activation. The core measurement would be how much attack success degrades when the adversary must fool both the probe and an output filter, compared to fooling the output filter alone. We'd sweep attack budgets to find where probes stop providing marginal defense, and plot the Pareto frontier between probe evasion and harmful-output quality.\n- Probe pooling strategy: mean-token, EMA, and suffix\n- Threat model: white-box access to the exact probe versus transfer from a separately trained probe\n\n2. **Task-safety representation coupling.** Mid-layer representations serve double duty: the model needs them for generating coherent output, not just for appearing safe. We'd measure whether adversarial inputs that successfully suppress probe signals also degrade the quality of harmful completions. Tight coupling would mean probes provide defense even when individually fooled, because dodging detection costs the attacker output coherence. We'd quantify this tradeoff by scoring completion quality alongside probe evasion success across a range of attack strengths and layers.\n\n3. **Weight-level attacks and probe recovery.** Beyond input-level attacks, we'd test whether a small amount of adversarial fine-tuning can teach a model to suppress probe signals while preserving harmful capabilities -- simulating an adversary who modifies weights rather than just crafting inputs. We'd then measure whether retraining the probe on a handful of post-modification examples restores detection -- the key question being whether recovery takes far fewer resources than the attack, which would make periodic retraining practical.\n- Fine-tuning budget: small to moderate LoRA interventions\n- Recovery data: varying from a handful to a few dozen post-modification labeled examples\n\n### Significance\n\nThe practical output would be a grounded assessment of probe reliability that deployment teams currently lack. Results would inform cascade design -- if probes hold up, teams can get meaningful protection at negligible compute overhead for most traffic, reserving expensive classifiers for flagged exchanges. If probes turn out to be brittle, teams know to invest in exchange-level classifiers instead. The fine-tuning experiments would clarify whether probes need retraining after any weight modification and roughly how much labeled data that takes. Deliverables include attack code, retrained probes, and a practical guide mapping probe architectures to the attack classes they resist -- artifacts other teams could reuse to validate their own monitoring setups.\n\n### Open Questions\n\nWe don't yet know whether the coupling between task-relevant and safety-relevant representations is tight enough to make adaptive attacks genuinely costly for the attacker. This likely varies by layer and behavior type, and our work would map these dependencies on open-weight models without resolving the frontier-scale case, where larger models might have enough representational slack to separate the two cleanly.", "b_kind": "human", "b_title": "Cheap probes as scalable safety classifiers", "b_text": "### Motivation\n\nSeparate-model classifiers can catch misuse and jailbreaking in production, but they're expensive -- each inference requires running an additional model. Probes, which train lightweight classifiers directly on a model's internal activations, are dramatically cheaper to deploy. The open question is whether probes can match the accuracy of those heavier classifiers while remaining resistant to adversarial inputs. If they can, labs could afford to run fine-grained safety checks on every request across every model. This project investigates the architectures, data generation methods, and generalization properties needed to close that gap.\n\n### Approach\n\n1. **Probe architecture and training signal.** We plan to compare linear probes against nonlinear alternatives -- MLPs and attention-based architectures -- to find the compute-accuracy pareto frontier. Beyond single-layer probes, we will evaluate cross-layer designs and multi-layer aggregation strategies that combine information from several points in the network. We also want to test distillation from prompted classifiers: using the model itself as a classifier via prompting to produce soft labels, then training a cheap probe to reproduce those labels. This transfers a strong but expensive signal into a lightweight detector.\n- Linear vs. MLP vs. attention-based probe heads\n- Cross-layer and multi-layer aggregation strategies\n- Distillation of soft labels from prompted-classifier outputs\n\n2. **Iterative data generation with LLMs.** Getting the right training data matters as much as architecture. We propose an iterative loop: use LLMs to red-team and audit existing probes, then have LLMs analyze the resulting errors to surface systematic failure patterns, then generate targeted synthetic data to patch those failures, and repeat. Beyond this loop, we will study how training data mix composition -- varying across languages, modalities, domains, and text styles -- affects generalization. We also plan to build synthetic data generators specifically for long-context and multimodal scenarios, where labeled real data is scarce.\n- Red-team → error analysis → synthetic patch data → repeat\n- Training mix across languages, modalities, domains, styles\n- Synthetic generators for long-context and multimodal inputs\n\n3. **Generalization benchmarking across axes.** We plan to measure how well probes transfer across several dimensions: different snapshots of the same model over time, different sizes within the same architecture family, and entirely different model architectures. A concrete test is cross-lingual generalization -- training a probe on English-only data and evaluating on other languages to directly measure sensitivity to distribution shift. These experiments should reveal whether probes learn something general about a model's representation of harmful content or merely memorize surface features of the training distribution.\n- Same model across training snapshots\n- Same architecture across model sizes\n- Cross-architecture and cross-lingual transfer\n\n### Significance\n\nIf probes can be made accurate and resilient enough, they become cheap enough to deploy densely -- fine-grained classifiers on every request across all production models. That density could surface unknown-unknown misuse categories and help labs validate whether their threat models match real-world attack patterns, turning probes into a discovery and auditing tool rather than just a filter. The cost argument also matters for adoption: less safety-conscious labs that won't pay for separate classifiers might still accept probes, so improving probe quality directly raises the safety floor for the least-invested actors. The probe science developed here is not limited to content classification -- it should transfer to building monitoring probes for AI control settings.\n\n### Open Questions\n\nWe don't yet know how to make probes reliably withstand distribution shifts, and this project identifies the problem more than it solves it. It is also unclear whether distillation from prompted classifiers retains enough signal to match their accuracy on adversarial inputs."}, {"prompt_id": 26, "proposal_name": "scaling_trends_at_99_plus_reliability", "prompt_text": "METR has done some great work measuring the 50% task horizon of LLMs. However, this metric does not directly map to the sort of wider \"how actually useful is AI in the world right now\" thing that I care about. What would a good societal impact evaluation study investigation look like here?", "areas_of_ai_safety": ["Alignment"], "afp_score": 2, "comparison_type": "scaffold_vs_human", "a_kind": "scaffold", "a_title": "Measuring the verification ceiling on useful ai autonomy", "a_text": "### Context and Gap\n\nRecent work on AI task horizons gives us a reasonable picture of how long a task frontier models can complete at a given reliability level. As models improve, the horizon extends, and forecasters use this trend to estimate when AI will automate various kinds of work. But completing a task isn't the same as creating value -- value requires that someone can check the output is acceptable, ideally in far less time than doing the work from scratch. This verification ratio varies enormously: code with a test suite is trivial to check, while a research analysis might take nearly as long to verify as to write. Current capability metrics don't account for this, yet verification cost likely determines the ceiling on useful AI autonomy more than raw completion rates do. The relationship hasn't been measured, so impact forecasts rest on an untested assumption that checking AI work is cheap.\n\n### Investigation\n\n**How does human verification time scale with the complexity of AI-generated work?**\n\nWe'd recruit software engineers through freelancing platforms and have them review AI-generated code at varying complexity levels, from single-function fixes to multi-file implementations. For each output, we'd measure time to a confident accept-or-reject judgment. We want to establish whether verification time grows sublinearly, linearly, or superlinearly with task difficulty -- a superlinear curve would mean the effective useful horizon is considerably shorter than the raw capability horizon.\n\n**What kinds of AI errors escape human review, and at what complexity?**\n\nWe'd plant controlled defects in a subset of outputs across several subtlety levels -- off-by-one errors, plausible-but-wrong algorithm choices, subtle security flaws. Detection rates as a function of both error subtlety and overall task complexity would produce an empirical map of where human oversight breaks down. Where humans can't catch AI errors on long tasks, delegating those tasks introduces undetected risk rather than saving effort.\n\n**Can simple task features predict verification difficulty without running the full study?**\n\nWe'd analyze the collected data to find which observable task properties -- decomposability, availability of automated checks, output format, domain specificity -- best predict the verification-to-generation time ratio. A small set of predictive features would let us cheaply extend the measurement to new domains and build an augmented task-horizon metric that folds in human verification costs.\n\n### Practical Strategy\n\nWe'd start with software engineering tasks, where test suites provide ground truth for planted defects and reviewers are straightforward to recruit. The initial round would use outputs from a single frontier model across a range of task difficulties. Expansion to data analysis and technical writing -- where verification is harder and more judgment-dependent -- would follow if the scaling relationship shows interesting structure in the first domain.\n\n### Significance\n\nThe deliverable would be a measured relationship between task complexity and verification cost, replacing the implicit assumption behind most AI-impact forecasts that checking AI work stays cheap as tasks get harder. Concrete downstream uses include calibrating autonomy-level decisions during deployment and identifying task classes where human oversight is likely to fail silently.", "b_kind": "human", "b_title": "Capability scaling trends at very high reliability", "b_text": "### Context and Gap\n\nRecent work on measuring AI ability to complete long tasks has tracked how model performance scales with task difficulty, using the time a human would need as a proxy for difficulty. This work reports performance at 50% and 80% success rates -- thresholds that tell us when models can sometimes or usually complete a task. But most high-stakes applications demand far more than that. For critical infrastructure, widespread automation, and scenarios involving rapid capability gains, what matters is reliability at 99% or above -- a regime where we have almost no empirical data. Estimating performance at these thresholds is expensive because it requires hundreds of independent runs per problem per model, which has made the regime effectively unstudied. Without data here, we can't tell whether the scaling trends observed at median reliability actually predict deployment-relevant performance.\n\n### Investigation\n\n**When tracking performance across successive models, does the slope of capability scaling change as the reliability threshold moves from 50% to 99%+?**\n\nWe would assemble tasks that are far cheaper to evaluate than full software engineering problems, using exam and coding questions labeled by grade or difficulty level alongside synthetic math and programming tasks parameterized by difficulty or the number of sequential steps required. These proxies for task difficulty replace expensive human time-to-complete measurements. By running each model hundreds of times per task, we can estimate pass rates at high thresholds and then compare how the scaling slope across models shifts as we raise the reliability bar from 50% to 95% to 99%+. If the slope flattens, improvements at median performance don't translate proportionally to the tail.\n\n**Are the errors models make at 99%+ reliability qualitatively different from errors at lower reliability levels, or just rarer instances of the same failure modes?**\n\nFor tasks where a model succeeds over 99% of the time, we would collect and categorize the residual failures, then compare them against the failure modes observed on tasks where the same model sits at 50-80% reliability. We're looking for whether the character of errors shifts -- for example, whether high-reliability failures tend to be more random or superficial while lower-reliability failures reflect deeper capability gaps -- or whether the same categories of mistakes persist across reliability levels.\n\n**At high reliability levels, are residual failures driven by sampling randomness or by specific questions that consistently trip the model up?**\n\nWe would distinguish between two sources of residual error: stochastic failures, where the model sometimes gets the same question wrong due to sampling variance, and systematic failures, where particular questions almost always cause mistakes. This decomposition matters directly for deployment strategy -- if failures are stochastic, retry and majority-vote approaches can push reliability much higher, but if certain inputs consistently cause failures, those strategies won't help. We'd measure this by tracking per-question pass rates across many runs and examining the variance structure.\n\n### Practical Strategy\n\nWe'd start with affordable open-weight models on discount inference endpoints to iterate quickly on evaluation design before spending on expensive runs. Once the methodology is validated, we would extend to frontier models. If we can obtain logit access for any models, we could use search-based methods to estimate the probability of incorrect outputs without requiring hundreds of samples per question -- a potentially much more efficient estimator of tail reliability.\n\n### Significance\n\nThis project tests the implicit assumption that scaling trends measured at median reliability extrapolate to the 99%+ regime that actually matters for deployment. If that assumption is wrong, current capability evaluations -- including time-horizon scaling analyses and models of how reliability decays with task duration -- systematically mispredict how models will perform in the high-stakes settings that most concern us."}, {"prompt_id": 3, "proposal_name": "automated_behavior_profiling", "prompt_text": "When we compare 2 checkpoints in training over a load of evals, I’m often disappointed with the amount of understanding I get. It feels like the edge-case nuances in behaviour are completely missing. What research could help solve this problem?", "areas_of_ai_safety": ["scalable_oversight", "alignment_training_techniques"], "afp_score": 5, "comparison_type": "scaffold_vs_llm_baseline", "a_kind": "llm_baseline", "a_title": "Surfacing meaningful behavioral differences between model checkpoints", "a_text": "### Motivation\n\nWhen training teams compare model checkpoints, the default approach is to run both through a fixed eval suite and compare aggregate score deltas. This tells you surprisingly little. A small accuracy bump on a reasoning benchmark can hide the fact that the newer checkpoint lost its grip on a specific class of multi-step problems while gaining ground on simpler ones. Regressions on rare but important input types -- unusual formatting, minority languages, ambiguous instructions -- get averaged away. Teams end up shipping checkpoints based on numbers that obscure exactly the behavioral changes most worth knowing about. What we need are methods that actively hunt for where two checkpoints diverge rather than passively averaging over fixed test sets.\n\n**Goal:** A tool that automatically discovers, clusters, and ranks the specific input regions where two checkpoints diverge, producing readable summaries of what actually changed.\n\n### Approach\n\nThe core principle is to treat checkpoint comparison as a search problem rather than a measurement problem -- actively generating inputs that distinguish two models, then organizing the results into interpretable patterns a training team can act on.\n\n1. **Divergence-seeking input generation:** We would start from seed inputs drawn from existing eval sets and mutate them to maximize behavioral disagreement between checkpoints. The generator could be a separate model, an evolutionary perturbation loop, or gradient-based search where weight access permits. The key tradeoff is breadth versus depth -- exploring many input types shallowly or drilling into specific capability regions.\n\n2. **Clustering discovered differences:** We'd group divergent examples by shared features -- topic, reasoning type, prompt structure, failure mode -- using embedding similarity or LLM-based tagging. What matters is cluster granularity: they should be specific enough to name (e.g., \"lost ability to track negation across longer chains\") but not so fine-grained that the output becomes an unreadable list.\n\n3. **Relevance-weighted ranking:** We would score each cluster by properties like safety relevance, estimated frequency in real usage, and magnitude of quality change, so that interesting differences separate cleanly from noise. A shift in comma placement isn't the same as a change in refusal behavior, and the ranking needs to reflect that. Scoring criteria could be user-configurable depending on deployment context.\n\n4. **Generalization to held-out data:** We would validate discovered patterns against held-out natural-distribution inputs that were not part of the generation loop, checking whether the behavioral differences replicate and comparing the tool's output against what teams find through manual inspection. Patterns that fail to transfer get flagged rather than reported, since divergences found through active search could be artifacts of the search process itself.\n\n### Open Questions\n\n- We don't yet know whether LLM-based generators will surface deep capability differences or mostly stylistic shifts that are easier to find but less meaningful.\n- Defining \"relevance\" without a specific deployment context is hard -- we may need users to supply their own weighting criteria rather than relying on a universal ranking.\n- Access requirements matter: gradient-based search needs weights, but black-box-only comparison may miss subtler divergences.\n\n### Validation and Significance\n\nThe approach works if it consistently surfaces checkpoint differences that domain experts rate as meaningful and that standard eval suites miss -- given two checkpoints with near-identical benchmark scores, the system should identify behavioral regressions a human reviewer would flag. Concrete downstream uses are ship-or-continue decisions during training, regression detection before deployment, and giving alignment researchers a finer-grained view of what training interventions actually change.", "b_kind": "scaffold", "b_title": "Active search for behavioral changes between checkpoints", "b_text": "### Motivation\n\nWhen labs update a model through continued training or fine-tuning, current practice compares aggregate eval scores across both versions. These scores tell you whether accuracy or safety metrics moved, but they reveal almost nothing about what actually changed. Any fixed evaluation set tests a predetermined slice of behavior, and differences outside that slice stay invisible. Worse, aggregate scores can stay flat while meaningful shifts cancel each other out -- the model improves on some edge cases and regresses on others, and the summary statistic hides both. Training teams end up knowing *that* something changed without knowing *what*, making it hard to confirm interventions did what was intended or spot unexpected side effects. What's needed is a way to actively search for behavioral differences rather than passively check a predetermined list.\n\n**Goal:** A prompt-generation pipeline that would iteratively search for behavioral differences between two checkpoints, producing discriminating test cases and human-readable summaries of what changed.\n\n### Approach\n\nWe'd treat checkpoint comparison as directed search rather than passive scoring -- iteratively generating prompts that expose where two checkpoints diverge, then distilling the structure of that disagreement into natural-language descriptions a human can verify independently.\n\n1. **Broad-spectrum seeding:** We'd generate a diverse initial prompt set spanning instruction following, boundary cases, reasoning, and creative tasks, then sample responses from both checkpoints. An LLM judge would score each prompt for behavioral divergence -- considering not just correctness but tone, reasoning strategy, detail level, and willingness to engage. We'd prioritize touching as many behavioral regions as possible over sheer volume to reduce the chance of missing entire categories of change.\n\n2. **Iterative refinement toward divergence boundaries:** For high-divergence seeds, a generator model would produce targeted variants that narrow down the difference -- more binary search than random sampling. When one checkpoint refuses a chemistry question while the other answers, for instance, the generator would adjust framing, specificity, and stated purpose across rounds to map exactly where each checkpoint draws its line. We'd bias toward prompts testing whether the difference holds across surface variation rather than overfitting to a single phrasing.\n\n3. **Difference clustering and summarization:** The discriminating prompts with paired responses would get grouped by an LLM into coherent behavioral themes, each described in plain language specific enough that someone unfamiliar with the search could predict which checkpoint gives which response on a new example. Descriptions need to be falsifiable -- vague claims like \"model B is more cautious\" wouldn't qualify. Clusters where the description poorly predicts actual paired responses would get split or revised until they do.\n\n4. **Held-out replication testing:** For each discovered difference, we'd generate fresh prompts predicted to exhibit the same divergence based solely on the natural-language description. The replication rate separates genuine behavioral patterns from prompt-specific artifacts. We'd use a separate generator model that hasn't seen the original search trajectory to avoid just reproducing close paraphrases.\n\n### Open Questions\n\n- The generator model's creativity bounds what differences can be discovered. Whether multiple different generators find complementary differences or converge on the same set would shape how we'd deploy this in practice.\n- We don't yet know whether the search converges to a stable set of differences or keeps surfacing new ones indefinitely -- explicit stopping criteria may be needed, which would change the tool's design.\n\n### Validation and Significance\n\nThe approach works if discovered differences replicate on held-out prompts and if training teams judge the reports as capturing changes they care about. We'd validate against controlled interventions where the expected effect is known, checking whether the tool recovers it without being told what to look for. Concrete downstream uses are post-training diagnostics, regression detection before deployment, and identifying side effects of targeted safety training."}];
+
+let currentIdx = 0;
+const state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+        // Defensive: ensure every question has a record.
+        for (const q of QUESTIONS) {
+          if (!parsed.responses[q.prompt_id]) {
+            parsed.responses[q.prompt_id] = { winner: null, notes: "" };
+          } else if (parsed.responses[q.prompt_id].notes === undefined) {
+            parsed.responses[q.prompt_id].notes = "";
+          }
+        }
+        return parsed;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const fresh = { batch_id: BATCH_ID, responses: {} };
+  for (const q of QUESTIONS) {
+    fresh.responses[q.prompt_id] = { winner: null, notes: "" };
+  }
+  return fresh;
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function renderMd(text) {
+  if (!text) return '<span style="color: var(--muted);">(no text)</span>';
+  return marked.parse(text);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderOnboardingSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="onboarding-section">
+      <div class="sec-title">${escapeHtml(sec.title)}</div>
+      <div class="sec-body">${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderHelpSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="help-section">
+      <div class="h-title">${escapeHtml(sec.title)}</div>
+      <div>${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderOnboarding() {
+  const card = document.getElementById('onboarding-card');
+  card.innerHTML = `<h2>Instructions</h2>${renderOnboardingSectionsHTML()}
+    <div class="onboarding-start-wrap">
+      <button class="onboarding-start-btn" onclick="startEval()">Start ranking &rarr;</button>
+    </div>`;
+  document.getElementById('help-content').innerHTML = renderHelpSectionsHTML();
+}
+
+const ONBOARDING_SEEN_KEY = 'pairwise_onboarding_seen_' + BATCH_ID;
+const PAIRWISE_REG_KEY = 'pairwise_reg_' + BATCH_ID;
+
+/* Returns {name, email, registered_at, ...} or null.
+ * Reads in-page registration first; falls back to any reg_prod_* key set by
+ * the prod registration_page.html (publish_pairwise_to_prod). */
+function getRegistration() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_REG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('reg_prod_')) {
+        const v = localStorage.getItem(k);
+        if (v) return JSON.parse(v);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function validEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function onRegInput() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const btn = document.getElementById('reg-submit-btn');
+  const err = document.getElementById('reg-error');
+  err.textContent = (email && !validEmail(email)) ? 'That doesn’t look like a valid email.' : '';
+  btn.disabled = !(name && validEmail(email));
+}
+
+function submitRegistration() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  if (!name || !validEmail(email)) return;
+  const reg = { name: name, email: email, registered_at: new Date().toISOString() };
+  try { localStorage.setItem(PAIRWISE_REG_KEY, JSON.stringify(reg)); } catch (e) {}
+  document.getElementById('registration-screen').classList.add('hidden');
+  if (hasSeenOnboarding()) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    refreshProgress();
+  } else {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  }
+}
+
+function hasSeenOnboarding() {
+  try { return !!localStorage.getItem(ONBOARDING_SEEN_KEY); } catch (e) { return false; }
+}
+
+function startEval() {
+  document.getElementById('onboarding-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, '1'); } catch (e) {}
+  refreshProgress();
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* Decide which screen to show first.
+ * In prod (publish_pairwise_to_prod injects `const EVAL_ID = ...`) the standalone
+ * registration_page.html already collected the rater info before redirecting here,
+ * so we skip our in-page registration. Onboarding still shows on the first visit
+ * (or any visit before "Start ranking →" has been clicked). */
+function initFlow() {
+  const inProd = (typeof EVAL_ID !== 'undefined');
+  if (!inProd && !getRegistration()) {
+    document.getElementById('registration-screen').classList.remove('hidden');
+    setTimeout(() => document.getElementById('reg-name').focus(), 50);
+  } else if (!hasSeenOnboarding()) {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  } else {
+    document.getElementById('eval-screen').classList.remove('hidden');
+  }
+}
+
+function showHelp() {
+  document.getElementById('help-overlay').classList.remove('hidden');
+}
+function hideHelp() {
+  document.getElementById('help-overlay').classList.add('hidden');
+}
+
+function renderPager() {
+  const host = document.getElementById('pager');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const answered = state.responses[q.prompt_id] && state.responses[q.prompt_id].winner;
+    const cls = ['pager-dot'];
+    if (i === currentIdx) cls.push('current');
+    if (answered) cls.push('answered');
+    html += `<span class="${cls.join(' ')}" title="Pair ${i + 1}${answered ? ' — winner picked' : ''}" onclick="goTo(${i})">${i + 1}</span>`;
+  });
+  host.innerHTML = html;
+}
+
+function renderQuestion() {
+  const q = QUESTIONS[currentIdx];
+  const resp = state.responses[q.prompt_id] || {};
+
+  document.getElementById('idea-grid').innerHTML = `
+    <div class="idea-card" data-side="A">
+      <div class="card-head">
+        <span class="idea-badge a">A</span>
+        <div class="idea-title">${escapeHtml(q.a_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.a_text)}</div>
+    </div>
+    <div class="idea-card" data-side="B">
+      <div class="card-head">
+        <span class="idea-badge b">B</span>
+        <div class="idea-title">${escapeHtml(q.b_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.b_text)}</div>
+    </div>`;
+
+  refreshPrefButtons(resp.winner);
+  document.getElementById('notes-current').value = resp.notes || '';
+  document.getElementById('prev-btn').disabled = currentIdx <= 0;
+  // Last pair: "Review →" leads to summary. Earlier pairs: standard Next.
+  const isLast = currentIdx >= QUESTIONS.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.disabled = false;
+  nextBtn.textContent = isLast ? 'Review →' : 'Next →';
+}
+
+function refreshPrefButtons(choice) {
+  document.querySelectorAll('#pref-row .pref-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.choice === choice);
+  });
+}
+
+function pick(choice) {
+  if (!['A', 'B', 'tie'].includes(choice)) return;
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].winner = choice;
+  refreshPrefButtons(choice);
+  saveState();
+  renderPager();
+  refreshProgress();
+}
+
+function onNotesInput(value) {
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].notes = value;
+  saveState();
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= QUESTIONS.length) return;
+  currentIdx = idx;
+  renderQuestion();
+  renderPager();
+  refreshProgress();
+}
+
+function navPrev() {
+  if (!document.getElementById('summary-screen').classList.contains('hidden')) {
+    exitSummary();
+    return;
+  }
+  goTo(currentIdx - 1);
+}
+function navNext() {
+  if (currentIdx >= QUESTIONS.length - 1) {
+    showSummary();
+  } else {
+    goTo(currentIdx + 1);
+  }
+}
+
+const PREF_LABEL = { 'A': 'A is better', 'B': 'B is better', 'tie': 'Both are equal' };
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const n = countAnswered();
+  document.getElementById('summary-sub').textContent = `${n} of ${total} answered. Review your picks below, then submit.`;
+  const list = document.getElementById('summary-list');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;
+    const cls = choice ? '' : 'unanswered';
+    const aWin = choice === 'A' || choice === 'tie';
+    const bWin = choice === 'B' || choice === 'tie';
+    const pickClass = choice === 'tie' ? 'tie' : (choice ? '' : 'none');
+    const pickLabel = choice ? PREF_LABEL[choice] : 'Not answered';
+    html += `<div class="summary-row ${cls}" onclick="jumpFromSummary(${i})">
+      <div class="pair-no">Pair ${i + 1}</div>
+      <div class="summary-titles">
+        <div class="summary-title ${aWin ? 'winner' : ''}"><span class="idea-badge">A</span><span class="ttext">${escapeHtml(q.a_title)}</span></div>
+        <div class="summary-title ${bWin ? 'winner' : ''}"><span class="idea-badge">B</span><span class="ttext">${escapeHtml(q.b_title)}</span></div>
+      </div>
+      <div class="summary-pick ${pickClass}">${pickLabel}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function showSummary() {
+  document.getElementById('eval-screen').classList.add('hidden');
+  document.getElementById('summary-screen').classList.remove('hidden');
+  renderSummary();
+  refreshProgress();
+}
+
+function exitSummary() {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  // Land back on the last pair so Prev/Next still make sense.
+  goTo(Math.min(currentIdx, QUESTIONS.length - 1));
+}
+
+function jumpFromSummary(idx) {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  goTo(idx);
+}
+
+function countAnswered() {
+  let n = 0;
+  for (const q of QUESTIONS) {
+    const r = state.responses[q.prompt_id];
+    if (r && r.winner) n++;
+  }
+  return n;
+}
+
+function refreshProgress() {
+  const n = countAnswered();
+  const total = QUESTIONS.length;
+  const pct = total === 0 ? 0 : Math.round((n / total) * 100);
+  const onSummary = !document.getElementById('summary-screen').classList.contains('hidden');
+  document.getElementById('topbar-sub').textContent = onSummary
+    ? `Summary · ${n} of ${total} answered`
+    : `Pair ${currentIdx + 1} of ${total} · ${n} of ${total} answered`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  for (const id of ['submit-btn', 'summary-submit-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = (n < total);
+    btn.textContent = `Submit (${n} / ${total})`;
+  }
+}
+
+function downloadResults() {
+  const rankings = QUESTIONS.map(q => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;  // 'A' | 'B' | 'tie' | null
+    let ratings, comparison;
+    if (choice === 'A')      { ratings = { 0: 10, 1: 0 };  comparison = 'A>B'; }
+    else if (choice === 'B') { ratings = { 0: 0,  1: 10 }; comparison = 'B>A'; }
+    else if (choice === 'tie') { ratings = { 0: 5, 1: 5 }; comparison = '≈'; }
+    else                       { ratings = { 0: null, 1: null }; comparison = null; }
+    return {
+      prompt_id: q.prompt_id,
+      proposal_name: q.proposal_name,
+      prompt: q.prompt_text,
+      idea_titles: [q.a_title, q.b_title],
+      choice: choice,
+      notes: r.notes || "",
+      // v5-compatible bookkeeping (so existing prod firebase write doesn't care).
+      order: [0, 1],
+      ratings: ratings,
+      comparisons: comparison ? { "1-2": comparison } : {},
+      pairwise_choice: choice ? { choice: choice } : null,
+    };
+  });
+  const out = {
+    timestamp: new Date().toISOString(),
+    batch_id: BATCH_ID,
+    batch_title: BATCH_TITLE,
+    storage_key: STORAGE_KEY,
+    registration: getRegistration(),
+    total_prompts: QUESTIONS.length,
+    ranked: countAnswered(),
+    rankings: rankings,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pairwise_${BATCH_ID}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const helpOpen = !document.getElementById('help-overlay').classList.contains('hidden');
+  if (e.key === 'Escape') {
+    if (helpOpen) { e.preventDefault(); hideHelp(); }
+    return;
+  }
+  if (helpOpen) return;
+  if (e.key === '?') { e.preventDefault(); showHelp(); return; }
+  // Lock keyboard controls until we're on the eval screen.
+  if (document.getElementById('eval-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); navPrev(); }
+  else if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); navNext(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); pick('A'); }
+  else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); pick('B'); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); pick('tie'); }
+});
+
+renderOnboarding();
+renderPager();
+renderQuestion();
+refreshProgress();
+initFlow();
+
+/* ==== PROD INJECTIONS (pairwise) ==== */
+
+/* ---- Firebase ---- */
+let _firestoreDb = null;
+
+function getFirestore() {
+    if (_firestoreDb) return _firestoreDb;
+    if (typeof FIREBASE_CONFIG === 'undefined' || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured — submissions will only be saved locally');
+        return null;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _firestoreDb = firebase.firestore();
+        return _firestoreDb;
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+        return null;
+    }
+}
+
+async function submitToFirebase(results) {
+    const db = getFirestore();
+    if (!db) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    const doc = {
+        registration: reg,
+        rankings: results,
+        eval_id: EVAL_ID,
+        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+    };
+
+    try {
+        const ref = await db.collection('evaluations').doc(EVAL_ID)
+            .collection('submissions').add(doc);
+        console.log('Submitted to Firebase:', ref.id);
+        return { success: true, id: ref.id };
+    } catch(e) {
+        console.error('Firebase submission failed:', e);
+        return { success: false, reason: e.message };
+    }
+}
+
+
+/* ---- EmailJS ---- */
+let _emailjsInitialized = false;
+
+function initEmailJS() {
+    if (_emailjsInitialized) return true;
+    if (typeof EMAILJS_CONFIG === 'undefined' || EMAILJS_CONFIG.public_key === 'REPLACE_ME') {
+        console.warn('EmailJS not configured — results will not be emailed');
+        return false;
+    }
+    if (typeof emailjs === 'undefined') {
+        console.warn('EmailJS SDK not loaded');
+        return false;
+    }
+    try {
+        emailjs.init(EMAILJS_CONFIG.public_key);
+        _emailjsInitialized = true;
+        return true;
+    } catch(e) {
+        console.error('EmailJS init failed:', e);
+        return false;
+    }
+}
+
+async function sendResultsEmail(results) {
+    if (!initEmailJS()) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
+
+    const ranked = results.ranked || 0;
+    const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
+
+    const templateParams = {
+        to_name: reg.name,
+        to_email: reg.email,
+        eval_id: EVAL_ID,
+        summary: `${ranked} of ${total} prompts ranked`,
+        results_json: dataUri,
+    };
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.service_id,
+            EMAILJS_CONFIG.template_id,
+            templateParams
+        );
+        console.log('Results emailed to', reg.email);
+        return { success: true };
+    } catch(e) {
+        console.error('Email send failed:', e);
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
+    }
+}
+
+
+/* ---- Pairwise Eval Page: Prod Overrides ----
+ * Drop-in counterpart to 8_human_ranking_ui_prod/scripts/prod_fragments/eval_overrides.js,
+ * but tailored to the pairwise UI globals defined by generate_pairwise_ui.py
+ * (STORAGE_KEY, EVAL_ID, state, saveState, downloadResults, countAnswered, QUESTIONS).
+ */
+
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+const _regData = localStorage.getItem(REG_KEY);
+if (!_regData) {
+    window.location.href = '../';
+}
+
+function getRegistration() {
+    try {
+        const saved = localStorage.getItem(REG_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+}
+
+function hashEmail(email) {
+    let hash = 5381;
+    for (let i = 0; i < email.length; i++) {
+        hash = ((hash << 5) + hash) + email.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+/* Namespace localStorage by eval + rater, then reload state from the new key. */
+(function () {
+    const reg = getRegistration();
+    if (reg) {
+        STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+                    for (const k of Object.keys(state.responses)) {
+                        if (parsed.responses[k]) state.responses[k] = parsed.responses[k];
+                    }
+                    if (typeof renderQuestions === 'function') renderQuestions();
+                    if (typeof refreshProgress === 'function') refreshProgress();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+})();
+
+/* Wrap downloadResults so it (a) writes locally, (b) submits to Firebase,
+ * (c) emails the rater their JSON. */
+const _originalDownloadResults = downloadResults;
+downloadResults = async function () {
+    const output = _originalDownloadResults();
+    output.eval_id = EVAL_ID;
+    output.registration = getRegistration();
+
+    const statusEl = document.getElementById('submission-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--text-secondary)">Submitting...</span>';
+        statusEl.classList.remove('hidden');
+    }
+
+    const fbResult = await submitToFirebase(output);
+    const emailResult = await sendResultsEmail(output);
+
+    if (statusEl) {
+        const parts = [];
+        if (fbResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Saved to server</span>');
+        } else if (fbResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Server not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Server save failed — your download has your data</span>');
+        }
+        const reg = getRegistration();
+        if (emailResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Results emailed to ' + (reg ? reg.email : '?') + '</span>');
+        } else if (emailResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
+        }
+        statusEl.innerHTML = parts.join('<br>');
+    }
+};
+
+/* Auto-save partial progress to Firebase (debounced 30s) on every state change. */
+let _autoSaveTimer = null;
+const _originalSaveState = saveState;
+saveState = function () {
+    _originalSaveState();
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(async () => {
+        const partial = {
+            timestamp: new Date().toISOString(),
+            eval_id: EVAL_ID,
+            batch_id: BATCH_ID,
+            batch_title: BATCH_TITLE,
+            registration: getRegistration(),
+            total_prompts: QUESTIONS.length,
+            ranked: countAnswered(),
+            is_partial: true,
+            responses: state.responses,
+        };
+        await submitToFirebase(partial);
+    }, 30000);
+};
+
+
+/* ==== END PROD INJECTIONS ==== */
+</script>
+</body>
+</html>

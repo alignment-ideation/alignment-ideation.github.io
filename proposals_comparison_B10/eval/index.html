@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairwise Idea Preference — Alignment-training durability, auditing, hard evals</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #9C4A2D;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --muted: #999999;
+    --border: #E0DDD4;
+    --row-hover: #FAFAF7;
+    --accent-soft: #FDF2EC;
+    --gold: #C99C2C;
+    --gold-dark: #92400E;
+    --gold-bg: #FEF3C7;
+    --gold-soft: #FEF7E0;
+    --success: #2D8F6F;
+    --success-hover: #226E55;
+    --success-bg: #D1FAE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+}
+.app {
+    display: flex; flex-direction: column;
+    height: 100vh; max-width: 1600px; margin: 0 auto;
+    padding: 10px 16px 10px 16px;
+    gap: 10px;
+}
+.hidden { display: none !important; }
+
+/* Compact topbar */
+.topbar {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 10px;
+}
+.topbar-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.topbar-sub { font-size: 0.78rem; opacity: 0.92; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.topbar-progress {
+    width: 240px; height: 6px; background: rgba(255,255,255,0.25);
+    border-radius: 10px; overflow: hidden;
+}
+.topbar-progress-fill { background: white; height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+.topbar-help {
+    background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+}
+.topbar-help:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.5); }
+
+/* Registration screen — collected before onboarding */
+.registration-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 32px;
+}
+.registration-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 30px 36px; max-width: 480px; width: 100%;
+}
+.registration-card h2 { color: var(--primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 18px; }
+.registration-card .intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 20px; line-height: 1.55; }
+.reg-field { margin-bottom: 14px; }
+.reg-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 5px; }
+.reg-field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.95rem;
+}
+.reg-field input:focus { outline: none; border-color: var(--primary); }
+.reg-error { color: var(--primary); font-size: 0.82rem; margin-top: 4px; min-height: 1em; }
+.reg-foot { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.reg-submit-wrap { margin-top: 20px; text-align: center; }
+.reg-submit-btn {
+    background: var(--primary); color: white; border: 1px solid var(--primary);
+    padding: 11px 28px; border-radius: 8px;
+    font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.reg-submit-btn:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.reg-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Onboarding screen (scrolls) */
+.onboarding-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center;
+}
+.onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 820px; width: 100%;
+    margin: 4px auto 20px auto;
+    height: max-content;
+}
+.onboarding-card h2 {
+    color: var(--primary); font-size: 1.3rem; font-weight: 700;
+    margin-bottom: 18px;
+}
+.onboarding-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.onboarding-section:first-of-type { border-top: none; padding-top: 4px; }
+.onboarding-section .sec-title {
+    font-weight: 700; color: var(--text);
+    font-size: 1rem; margin-bottom: 4px;
+}
+.onboarding-section .sec-body { color: var(--text); font-size: 0.94rem; line-height: 1.7; }
+.onboarding-section .sec-body p { margin: 6px 0; }
+.onboarding-section .sec-body ul, .onboarding-section .sec-body ol { margin: 6px 0 6px 22px; }
+.onboarding-section .sec-body li { margin: 3px 0; }
+.onboarding-section .sec-body code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
+.onboarding-section .sec-body a { color: var(--primary); }
+
+/* Eval screen: flex column filling remaining viewport. */
+.eval-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Idea grid: fills remaining vertical space; each card scrolls internally. */
+.idea-grid {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.idea-card {
+    background: var(--row-hover);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.idea-card .card-head {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.5);
+}
+.idea-card .idea-title { font-size: 0.98rem; font-weight: 700; color: var(--text); flex: 1; min-width: 0; }
+.idea-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 10px 16px 14px 16px;
+    font-size: 0.88rem; line-height: 1.6; color: var(--text);
+}
+.idea-body p { margin: 5px 0; }
+.idea-body ul, .idea-body ol { margin: 5px 0 5px 20px; }
+.idea-body li { margin: 2px 0; }
+.idea-body strong { color: var(--text); }
+.idea-body h1, .idea-body h2, .idea-body h3, .idea-body h4 {
+    font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 10px 0 4px 0;
+}
+.idea-body h1:first-child, .idea-body h2:first-child, .idea-body h3:first-child, .idea-body h4:first-child { margin-top: 0; }
+
+.idea-badge {
+    display: inline-block;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 1px;
+    padding: 2px 9px; border-radius: 4px;
+    background: var(--success); color: white;
+}
+
+/* Preference button row: A is better / Both equal / B is better */
+.pref-row {
+    flex: none;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px;
+}
+.pref-btn {
+    background: var(--surface); color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pref-btn:hover { border-color: var(--success); color: var(--success); }
+.pref-btn.selected {
+    background: var(--success); border-color: var(--success); color: white;
+    box-shadow: 0 2px 8px rgba(45, 143, 111, 0.25);
+}
+.pref-btn.selected:hover { background: var(--success-hover); border-color: var(--success-hover); color: white; }
+
+/* Tie button uses a neutral grey instead of green to avoid implying preference. */
+.pref-btn[data-choice="tie"]:hover { border-color: #6B7280; color: #6B7280; }
+.pref-btn[data-choice="tie"].selected {
+    background: #6B7280; border-color: #6B7280; color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.25);
+}
+.pref-btn[data-choice="tie"].selected:hover { background: #4B5563; border-color: #4B5563; color: white; }
+.pref-btn .kbd-mini {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-secondary);
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+.pref-btn.selected .kbd-mini { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: white; }
+
+/* Inline notes textarea, single row in the bottom band */
+.notes-row {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px;
+}
+.notes-row label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; flex: none; }
+.notes-row textarea {
+    flex: 1; min-height: 28px; max-height: 70px; resize: vertical;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+}
+.notes-row textarea:focus { outline: none; border-color: var(--primary); }
+
+/* Bottom nav: prev / pager dots / submit / next */
+.nav-bar {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px;
+}
+.pager-dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pager-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 0.74rem; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+}
+.pager-dot:hover { border-color: var(--primary); color: var(--primary); }
+.pager-dot.current { background: var(--primary); border-color: var(--primary); color: white; }
+.pager-dot.answered { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pager-dot.current.answered { background: var(--success); border-color: var(--success); color: white; }
+.nav-side { display: flex; align-items: center; gap: 6px; }
+
+.btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+.btn.btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+.btn.btn-primary:disabled { background: var(--primary); border-color: var(--primary); color: white; opacity: 0.4; }
+
+.kbd { display: inline-block; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; }
+
+/* Summary screen — review picks before submitting */
+.summary-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.summary-header {
+    flex: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+}
+.summary-header h2 { color: var(--primary); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.summary-header .sub { color: var(--text-secondary); font-size: 0.88rem; }
+.summary-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.summary-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+    display: grid; grid-template-columns: 60px 1fr 160px; gap: 12px; align-items: center;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+}
+.summary-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(193, 95, 60, 0.06); }
+.summary-row.unanswered { border-color: #E0B4A8; background: #FBEEE8; }
+.summary-row .pair-no { font-size: 0.78rem; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; text-transform: uppercase; }
+.summary-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.summary-title {
+    display: flex; gap: 8px; align-items: baseline; min-width: 0;
+    font-size: 0.88rem; color: var(--text-secondary);
+}
+.summary-title .idea-badge { flex: none; }
+.summary-title .ttext {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-title.winner { color: var(--text); font-weight: 600; }
+.summary-title.winner .ttext { color: var(--text); }
+.summary-pick {
+    text-align: center; font-size: 0.85rem; font-weight: 700;
+    padding: 6px 10px; border-radius: 6px;
+    background: var(--success); color: white;
+    white-space: nowrap;
+}
+.summary-pick.tie { background: #6B7280; }
+.summary-pick.none { background: #F4F3EE; color: #B25C46; border: 1px dashed #D49A8B; font-weight: 600; }
+
+/* Onboarding screen start button */
+.onboarding-start-wrap { margin-top: 24px; text-align: center; }
+.onboarding-start-btn {
+    background: var(--primary); color: white;
+    border: 1px solid var(--primary);
+    padding: 12px 32px; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.onboarding-start-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* Help overlay (reused from v5 style) */
+.help-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.help-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 780px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    position: relative;
+    font-size: 0.95rem; line-height: 1.7;
+}
+.help-modal h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: 16px; }
+.help-modal .help-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.help-modal .help-section:first-of-type { border-top: none; padding-top: 4px; }
+.help-modal .help-section .h-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.help-modal .help-section a { color: var(--primary); }
+.help-modal .help-section code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.help-modal img { max-width: 100%; height: auto; }
+.help-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    color: var(--text-secondary); padding: 4px 10px;
+    line-height: 1;
+}
+.help-close:hover { color: var(--text); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D5D2C9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ---- Prod: Submission Status ---- */
+#submission-status {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">Alignment-training durability, auditing, hard evals</div>
+      <div class="topbar-sub" id="topbar-sub">3 pairs · 0 winners picked</div>
+    </div>
+    <div class="topbar-progress"><div class="topbar-progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    <button class="topbar-help" onclick="showHelp()">? Help</button>
+  </div>
+
+  <div id="registration-screen" class="registration-screen hidden">
+    <div class="registration-card">
+      <h2>Before we start</h2>
+      <div class="reg-field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" type="text" autocomplete="name" oninput="onRegInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('reg-email').focus();}">
+      </div>
+      <div class="reg-field">
+        <label for="reg-email">Email</label>
+        <input id="reg-email" type="email" autocomplete="email" oninput="onRegInput()" onkeydown="if(event.key==='Enter')submitRegistration()">
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+      <div class="reg-submit-wrap">
+        <button class="reg-submit-btn" id="reg-submit-btn" disabled onclick="submitRegistration()">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card" id="onboarding-card"></div>
+  </div>
+
+  <div id="eval-screen" class="eval-screen hidden">
+    <div class="idea-grid" id="idea-grid"></div>
+
+    <div class="pref-row" id="pref-row">
+      <button class="pref-btn" data-choice="A" onclick="pick('A')">A is better <span class="kbd-mini">A</span></button>
+      <button class="pref-btn" data-choice="tie" onclick="pick('tie')">Both are equal <span class="kbd-mini">E</span></button>
+      <button class="pref-btn" data-choice="B" onclick="pick('B')">B is better <span class="kbd-mini">B</span></button>
+    </div>
+
+    <div class="notes-row">
+      <label for="notes-current">Optional — justify your decision</label>
+      <textarea id="notes-current" placeholder="A short note helps a lot when we read these later." oninput="onNotesInput(this.value)"></textarea>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" id="prev-btn" onclick="navPrev()">&larr; Prev</button>
+        <button class="btn" id="next-btn" onclick="navNext()">Next &rarr;</button>
+      </div>
+      <div class="pager-dots" id="pager"></div>
+      <div class="nav-side">
+        <span style="font-size:0.75rem; color: var(--text-secondary);"><span class="kbd">A</span>/<span class="kbd">E</span>/<span class="kbd">B</span> pick · <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+        <button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0 ranked)</button>
+            <div id="submission-status" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-screen" class="summary-screen hidden">
+    <div class="summary-header">
+      <h2>Review your picks</h2>
+      <div class="sub" id="summary-sub"></div>
+    </div>
+    <div class="summary-list" id="summary-list"></div>
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" onclick="exitSummary()">&larr; Back to pairs</button>
+      </div>
+      <div style="font-size:0.78rem; color: var(--text-secondary);">Click a row to revise that pair.</div>
+      <div class="nav-side">
+        <button class="btn btn-primary" id="summary-submit-btn" disabled onclick="downloadResults()">Submit (0 / 0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help-overlay" class="help-overlay hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="help-modal">
+    <button class="help-close" onclick="hideHelp()" aria-label="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div id="help-content"></div>
+  </div>
+</div>
+<script>
+let STORAGE_KEY = 'rankings_prod_proposals_comparison_B10_default';
+const EVAL_ID = 'proposals_comparison_B10';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const EMAILJS_CONFIG = {"service_id": "service_sdkgwjx", "template_id": "template_pztjzon", "public_key": "USnRousNcwC1uAee-"};
+const BATCH_ID = "B10_training_durability";
+const BATCH_TITLE = "Alignment-training durability, auditing, hard evals";
+const ONBOARDING_SECTIONS = [{"title": "Before You Begin", "body": "You are comparing pairs of AI safety research ideas. In each pair, two ideas — labelled **A** and **B** — were written in response to the same research prompt. You don't know which is which: one is from a human researcher and one is AI-generated. Your job is to pick the one you'd rather see pursued in an [Anthropic Fellows Program](https://alignment.anthropic.com/2025/anthropic-fellows-program-2026/) (AFP) project.\n\nFacts about the Anthropic Fellows Program (for context on what's pursuable):\n\n* 4 months\n* 2 fellows per project\n* $15k/month compute budget each\n* Unlimited access to the Claude API, but no access to internal tooling or data\n\nIf you are less familiar with the sort of empirical technical alignment research done by Anthropic's Fellows Program, skim [https://alignment.anthropic.com/](https://alignment.anthropic.com/) and come back."}, {"title": "Scope vs Quality", "body": "Ideas don't need to fit the 4-month window perfectly — scope can be adjusted afterwards. What matters is whether the underlying research taste is good: whether fleshing the idea out would uncover research questions and experiments worth pursuing, and ultimately make Transformative AI go well.\n\nThe info that conveys taste should already be present in the idea."}, {"title": "How to choose between A and B", "body": "A useful framework:\n\n1. Read the prompt and categorise what sub-area this is about (AI control, scalable oversight, alignment training, CoT monitorability, adversarial robustness, alignment auditing agents, …).\n2. Think briefly about what good work in that sub-area would look like — what matters, what's hard, what would actually move the needle.\n3. Click the idea you'd rather see pursued. If you are unsure, you can select **Both are equal**."}, {"title": "Using the interface", "body": "One pair per page. Use the three buttons under the cards to record your call: **A is better**, **Both are equal**, or **B is better** — the selected button turns green (grey for \"equal\"). You can change your mind any time. Use the **Prev** / **Next** buttons or arrow keys to move between pairs; press **A**, **E**, or **B** to pick from the keyboard. The **Submit** button unlocks once every pair has an answer."}];
+const QUESTIONS = [{"prompt_id": 29, "proposal_name": "stress_testing_inoculation_prompting", "prompt_text": "I'm concerned that current alignment training techniques won't hold up to later future models. Seems like more stress-testing is needed here focusing around this. What would a good research investigation into this look like?", "areas_of_ai_safety": ["Alignment Training", "AI Control"], "afp_score": 3, "comparison_type": "scaffold_vs_llm_baseline", "a_kind": "llm_baseline", "a_title": "Alignment depth across model scales", "a_text": "### Background\n\nCurrent alignment methods -- mainly preference optimization and reinforcement learning from human feedback -- adjust a pretrained model's outputs to match human-approved behavior. On today's chat models this works well enough: models refuse harmful requests and follow instructions cooperatively. But recent work shows that safety fine-tuning can be reversed with surprisingly little effort, sometimes needing only a small set of uncensored examples. As frontier labs scale to more capable base models, it's unclear whether alignment training keeps pace or becomes a thinner, more easily stripped layer sitting on top of an increasingly capable substrate. The safety case for deployed models currently rests heavily on alignment holding up.\n\n### Hypothesis\n\nWe believe that as base model capability increases, standard preference-based alignment training modifies an increasingly shallow slice of the model's internal representations, leaving deeper capability circuits untouched. The mechanism would be that more capable models build richer, more redundant pathways for generating harmful content, and alignment learns to suppress outputs through narrow surface-level patterns rather than restructuring those pathways.\n\n### Approach\n\n1. **Construct a capability ladder.** We would assemble a family of base models at several capability levels, varying parameter count and training compute while holding architecture and pretraining data distribution as constant as possible, and controlling for remaining distributional differences post hoc.\n\n2. **Apply uniform alignment training.** Each model would be fine-tuned using an identical preference-optimization pipeline -- same preference dataset, same reward signal, same number of training steps per parameter -- so that outcome differences track the base model rather than the alignment dose.\n\n3. **Probe alignment depth.** For each aligned model we would probe internal representations before and after fine-tuning, using linear probes and activation patching to quantify how many layers and what fraction of residual-stream dimensions were meaningfully altered. We'd also measure behavioral fragility -- how quickly adversarial fine-tuning on a small uncensored dataset reverses safety behavior. Shallower alignment should reverse faster.\n\n4. **Cross-validate with prompt attacks.** Independently, each aligned model would be tested against a fixed suite of adversarial prompts scaled in sophistication. Greater susceptibility to prompt-level bypasses in the larger models would corroborate the representational measurements.\n\nWe'd refine the probe methodology as early results clarify which measurements prove most useful.\n\n### Risks and Counterpoints\n\n- Some evidence suggests larger models internalize alignment more deeply, since they have more capacity to represent the preference signal. Our hypothesis could simply be wrong at the scales we can test.\n- Our capability ladder may not reach the scale where the effect appears. The failure mode might only emerge at frontier scale, making negative results hard to interpret for the models that matter most.\n- Linear probes can miss nonlinear structure, which would make alignment look shallower than it actually is and inflate our effect sizes.\n\n### Expected Outcome\n\nA successful project would deliver a measured curve relating base model capability to both the representational depth and behavioral fragility of alignment training. The concrete outputs -- depth measurements, fragility timelines, and the probe toolkit -- would be available for future work. We don't yet know which direction the curve goes, and settling that for the scale range we can access would help clarify whether current alignment techniques need rethinking.", "b_kind": "scaffold", "b_title": "Hidden misbehavior after iterative safety training", "b_text": "### Background\nThe standard correction loop at frontier labs goes: red-team a model to find unwanted behavior, fine-tune against the discovered failures, repeat. This cycle is the backbone of iterative safety improvement. Research on deliberately planted backdoors found that this process can sharpen trigger discrimination rather than remove the underlying policy -- the model learns which contexts are adversarial and saves its misbehavior for the rest. Whether this dynamic extends beyond artificial backdoors to misalignment that arises more naturally -- such as the broad behavioral shifts recently shown to emerge from narrow fine-tuning on implicitly deceptive code -- hasn't been examined. As models grow more capable and this loop remains the primary correction tool, understanding whether it removes naturalistic misbehavior or teaches concealment matters for how much confidence labs should place in it.\n\n### Hypothesis\nIterative red-team-and-train cycles applied to emergently misaligned models will reduce overt misbehavior on the elicitation methods used during training while leaving the misaligned disposition accessible through held-out methods. Sharpening context discrimination -- learning \"when not to defect\" -- is a simpler parameter change than removing the disposition itself, so adversarial fine-tuning preferentially updates the former.\n\n### Approach\n1. **Induce emergent misalignment.** We'd fine-tune several open-weight instruction-tuned models on the insecure-code dataset from prior work, screening for model families where the effect reliably produces conversational misbehavior on unrelated prompts.\n2. **Iterate adversarial training.** We'd run several rounds of: red-team the current checkpoint with automated attack generation, collect successful elicitations, fine-tune against them with safety SFT. We'd partition elicitation methods into a training pool and a held-out pool -- the training pool drives the adversarial rounds while the held-out pool (prefill attacks, user persona sampling, output format changes, many-shot prompting) is never trained against.\n3. **Probe with held-out methods.** After each round, we'd test for surviving misalignment using only the held-out pool and train linear probes on intermediate-layer activations -- in particular, checking whether probes trained on early checkpoints still fire as behavioral misalignment on training-pool methods drops.\n4. **Benchmark against non-iterative safety SFT.** As a control, we'd apply the same total training compute to a single round of diverse safety demonstrations without the adversarial loop, comparing residual misalignment between the two strategies.\n\n### Risks and Counterpoints\n- Emergent misalignment from insecure code may be too fragile to survive even one round of safety training in some model families. Prior work showed large variation across models, with some showing very little effect. We'd screen beforehand and potentially strengthen the initial misalignment via longer fine-tuning.\n- The held-out elicitation methods might be too weak to surface surviving misalignment even when it persists, producing false reassurance. When all held-out methods return near-zero, we can't distinguish successful concealment from actual removal.\n- Linear probes might track surface correlates like tone markers rather than dispositions, making the internal comparison unreliable.\n\n### Expected Outcome\nThe main deliverable would be measured curves showing how overt misalignment and residual misalignment (under held-out elicitation) evolve across adversarial training rounds, together with probe-based evidence on whether internal representations track overt behavior or diverge. This would give labs concrete guidance on when iterative red-teaming is removing dangerous behavior versus teaching models to hide it. Should the held-out misalignment drop in lockstep with overt misalignment, that would suggest naturalistic misbehavior is shallower than planted backdoors and more amenable to behavioral training."}, {"prompt_id": 34, "proposal_name": "training_investigator_agents_for_alignment_auditing", "prompt_text": "Prompting approaches for automated alignment auditing agents are reaching diminishing returns. I want to find new approaches, not prompting, that help push the frontier of alignment auditing. What would be some useful research here?", "areas_of_ai_safety": ["Scalable Oversight", "AI Control"], "afp_score": 5, "comparison_type": "scaffold_vs_llm_baseline", "a_kind": "llm_baseline", "a_title": "Trained auditors for novel alignment failure detection", "a_text": "## Motivation\n\nMost alignment auditing today relies on prompting frontier models -- feeding them transcripts or evaluation logs and asking them to flag concerns. This scaled quickly for known failure classes but is hitting clear limits. Prompted auditors struggle with failures that require tracking patterns across many interactions, since each audit fits in one context window with no task-specific learning. They're also inconsistent: the same trace receives contradictory assessments under minor prompt changes. And they almost never surface failure modes not described in the prompt -- recent evaluations suggest they catch what they're told to look for but rarely discover novel categories. The core issue, distinct from prompt-engineering work, is that prompting redirects existing capabilities without creating new ones. We need auditing systems that have learned what alignment failures look like, not systems told what to seek each time.\n\n## Goal\n\nWe would train dedicated auditing models on synthetic alignment failure data and validate them against held-out failure suites and independent red-team exercises, measuring whether they outperform the best prompted baselines on both known and novel failure classes.\n\n## Approach\n\n1. **Synthetic failure data at scale**: We would build training sets from two complementary strategies. The first would take known failure categories and use current models to produce diverse examples -- conversations where a model pursues undisclosed goals, omits relevant information, or gives misleading advice with varying degrees of subtlety. The second would apply perturbation methods: starting from verified-aligned behavior and systematically introducing failures with controlled difficulty gradients, so that training covers a range from obvious to barely-detectable misalignment.\n- Validation sets would exclude entire failure types from training to test generalization to novel classes.\n\n2. **Contrastive training on traces**: We would fine-tune the auditor with a contrastive objective distinguishing aligned from misaligned traces, framed as ranking rather than binary classification. The model would learn to score how concerning a trace is, trained on pairwise comparisons where one trace is more problematic than the other -- this avoids hard threshold choices and lets us calibrate sensitivity after training.\n- Curriculum learning over difficulty levels would help with the hard tail of subtle failures.\n\n3. **Learned adversarial search**: We would train a separate model to actively seek inputs that trigger alignment failures in the target, using reinforcement learning where reward comes from the detection model confirming a real failure. Instead of waiting for failures to surface in logs, we go looking for them.\n- Reward would specifically target alignment-relevant behavior, not policy violations alone.\n\n4. **Activation-level anomaly signals**: Where white-box access is available, we'd train lightweight probes on the target's intermediate activations to flag when internal states diverge from outputs. Even simple linear probes catch discrepancies between a model's internal processing and stated conclusions -- the expected signature of deceptive alignment -- without requiring full interpretability.\n\n## Risks\n\n- Synthetic training data may encode our assumptions about misalignment, so the auditor could inherit the blind spots we're trying to fix. Testing against independently-sourced failure sets would help measure this.\n- The gap between synthetic training and real deployment could be large -- emergent misalignment involves longer horizons and multi-agent dynamics that synthetic data struggles to capture.\n- The prompting ceiling may actually be a capability ceiling in the base model, meaning fine-tuning wouldn't help either. The clearest sign would be a fine-tuned auditor failing to surface any failures the best-prompted version also misses.", "b_kind": "scaffold", "b_title": "Training auditor agents on models with known flaws", "b_text": "## Motivation\n\nAlignment auditing pipelines increasingly rely on prompted LLM agents that probe target models through multi-turn conversation. The auditor's entire probing strategy is encoded in its system prompt, which leaves no room for the kind of adaptive skill experienced human red-teamers develop -- recognizing that certain evasive patterns signal specific vulnerabilities, or shifting tactics when earlier lines of questioning stall. In practice, this ceiling is visible: auditor agents settle into repetitive interaction patterns, struggle to follow up on ambiguous signals, and can't improve from one audit session to the next. Separately, recent work on model organisms has shown it's possible to build models with ground-truth misalignment properties using character training, narrow finetuning, or belief implantation. When we know exactly what an auditor should find, that knowledge becomes a training signal. The key distinction from automated red-teaming is that auditing requires characterizing a model's underlying properties -- not just eliciting one bad output.\n\n## Goal\n\nWe would build an RL-trained auditor agent that discovers known misalignment in model organisms, then measure whether the learned auditing strategies transfer to misalignment types the auditor wasn't trained against.\n\n## Approach\n\n1. **Build diverse model organisms:** We'd construct open-weight models with distinct misalignment properties using established methods -- character training for a subtly manipulative persona, narrow finetuning on deceptive code to induce emergent misalignment, and synthetic document finetuning to implant false beliefs the model defends under questioning. Each organism would need a clearly defined ground-truth property an auditor should surface. Diversity across misalignment type would matter more than the number of organisms.\n\n2. **RL training with discovery reward:** The auditor would conduct multi-turn conversations with a target, then submit a structured report. Reward would come from correctly identifying the ground-truth property, with penalties for false positives. The auditor would also interact with aligned models during training, learning that \"nothing concerning detected\" is often the right answer. We'd start with easier organisms where misalignment surfaces readily and gradually introduce harder cases, since early training needs enough success signal to learn from. Getting the reward granularity right is likely the hardest design problem -- too coarse and the auditor reports vague concerns everywhere, too fine and it can't get signal early in training.\n\n3. **Transfer evaluation on held-out organisms:** We'd reserve several model organisms entirely from training and test whether the auditor detects their misalignment above prompted-baseline rates. The strongest test would be cross-method transfer -- training only against character-trained organisms but evaluating against emergent-misalignment organisms. When transfer fails, the failure mode matters: whether the auditor misses the misalignment entirely or detects something but mischaracterizes it would tell us different things about what generalizes.\n\n4. **Prompted baselines for comparison:** We'd benchmark the RL-trained auditor against the same base model using best-available audit prompts, measuring detection rate, false positive rate, and conversation efficiency across the full organism bank.\n\n## Risks\n\n- The model organisms we can feasibly build may be too homogeneous, teaching the auditor narrow tricks rather than general auditing skill. Per-organism detection rates would reveal whether the auditor is generalizing or memorizing.\n- RL training might produce reward hacking -- the auditor learns to detect artifacts of the model organism training process rather than misalignment itself, a problem we'd diagnose by testing on organisms built with varied training recipes.\n- Transfer across misalignment types may not work, meaning one trained auditor can't replace multiple specialized prompted auditors and the training investment doesn't pay off."}, {"prompt_id": 7, "proposal_name": "building_hard_fuzzy_evaluations", "prompt_text": "Even domain experts disagree about what constitutes a flaw in open-ended safety arguments, so if oversight evaluations need ground-truth quality labels for these domains, what research approaches could produce labeled data that isn’t just recapitulating one evaluator’s preferences?", "areas_of_ai_safety": ["Scalable Oversight"], "afp_score": 4, "comparison_type": "scaffold_vs_human", "a_kind": "human", "a_title": "Evaluations for hard fuzzy tasks in scalable oversight", "a_text": "## Background\nThe hard part of scalable oversight isn't evaluating tasks that are merely difficult or merely subjective -- it is evaluating tasks that are both hard and fuzzy, where we cannot write down a formal definition of \"correct.\" Judging the quality of a research paper, an essay argument, or whether a model behaved in an aligned way during an open-ended interaction all fall into this category. We currently do not have enough evaluations for these tasks, and without them we cannot tell whether scalable oversight methods actually work. This project aims to build more of them.\n\n## Requirements\nAny valid evaluation must satisfy two properties. First, good and bad responses must come from the same distribution -- if they do not, a model can learn to distinguish the distributions rather than judge actual quality, a confound that invalidates the evaluation entirely. Second, we need ground truth correctness labels even for fuzzy tasks, ruling out purely preference-based or relative-ranking approaches where no one knows who is right.\n\n## Approach\n1. **Scraping existing artifacts.** Sources like essay prize answers, college essay competitions, paper reviews, posted exam solutions, and r/changemyview delta-awarded posts provide quality-labeled artifacts, but they rarely satisfy the same-distribution requirement as-is. The conversion work is making matched sets where surface-level distribution differences do not leak the label.\n\n2. **Manual labeling on key domains.** For domains that particularly resist formalization -- aligned behavior, conceptual reasoning, instruction following in agentic contexts -- we can directly write or label good and bad responses. This is expensive but targets the areas where automated construction is hardest to trust.\n\n3. **Symmetric rewrite pipelines.** We take known-good artifacts and introduce flaws, then have a model rewrite both the good and bad versions through an identical process to collapse distribution differences while preserving the correctness distinction. Without this symmetric step, the two classes are often trivially separable by style rather than substance.\n\n4. **Hint-conditioned generation.** A model generates solutions conditioned on a hint that is either correct or subtly flawed -- because only the hint varies, the generation process itself addresses distribution-matching. A stronger variant uses a \"hinter\" model with ground truth access that provides hints of gradually increasing strength until the generator stochastically produces artifacts sufficiently close to the known-good one, with the hinter then serving as a reasonable ground truth judge.\n\n5. **Partial progress on crisp tasks.** Evaluating plans or intermediate steps is inherently fuzzy even when the end task has a crisp success criterion. We get ground truth labels by rolling out the remainder to completion and checking whether it succeeded, converting a crisp end-task into a fuzzy intermediate evaluation with verifiable labels.\n\n6. **Approximate memorization.** We train a single model on a few good and bad examples per question so it stochastically produces both, paired with a similarity-based judge against the ground truth artifact. The critical constraint is avoiding full memorization, which makes good and bad outputs distributionally distinguishable; we need a sweet spot of approximate memorization where the model smooths between the distributions enough that they can't be told apart.\n\n## Outlook\nWe expect that some of these methods won't work -- the distributional constraints are genuinely hard to satisfy. But there are enough independent angles that some versions should succeed. A successful outcome is a suite of hard fuzzy evaluations with verified ground truth, letting us measure whether scalable oversight techniques make real progress on the tasks that matter most.", "b_kind": "scaffold", "b_title": "Planted-flaw benchmarks for safety argument evaluation", "b_text": "## Background\n\nTraining monitors or reward models for open-ended safety tasks -- reviewing alignment arguments, assessing safety cases, evaluating research quality -- runs into a data problem. Verifiable domains like coding provide cheap ground truth, but for argument-heavy safety work, what counts as a flaw is contested. Two domain experts can examine the same reasoning chain and disagree about whether the evidence supports the conclusion. Labeled datasets for these tasks tend to encode whichever evaluator wrote the rubric rather than a signal other qualified reviewers would reproduce. As a result, some of the highest-stakes evaluation tasks have the weakest measurement infrastructure behind them.\n\n## Requirements\n\nAny useful labeled dataset here must provide labels that different qualified evaluators would converge on. Flaw-detection labels are more promising than quality ratings because \"this argument contains circular reasoning in paragraph three\" is a more verifiable claim than \"this argument is strong overall.\" The labels also need to span a meaningful difficulty range -- without that, the data can't calibrate monitors for the hard cases that matter in deployment.\n\n## Approach\n\n1. **Flaw insertion pipeline.** We'd take real safety arguments from public alignment research, safety cases, and red-team reports, then use frontier models to insert specific reasoning flaws: unstated assumptions, circular reasoning, scope mismatches, and selective evidence. Each insertion would come with a ground-truth annotation specifying the flaw type and location, with a human reviewer confirming the flaw is real and detectable in principle -- rejecting insertions that aren't actual errors or that break surrounding text in ways making them trivially obvious.\n\n2. **Subtlety gradient.** Each flaw would be generated at multiple difficulty levels by controlling how deeply it integrates with surrounding reasoning. A shallow version might be a non-sequitur; a deep version might quietly drop a necessary condition while adding plausible supporting scaffolding. We'd validate the gradient by measuring detection rates across a small panel of researchers.\n\n3. **Agreement comparison.** We'd have multiple evaluators independently search for flaws in mixed planted-flaw and clean documents, then compare inter-rater reliability on flaw detection against reliability on overall quality ratings of those same documents. We expect flaw detection to show higher agreement, though the size of the gap is an empirical question and a small gap would undercut the motivation for this approach over standard quality labeling.\n\n4. **Monitor benchmarking.** We'd use the corpus to train and evaluate model-based monitors, reporting detection-rate curves across subtlety levels rather than single aggregate numbers. The interesting comparison is between monitors fine-tuned on planted-flaw data, monitors given few-shot examples, and monitors prompted with generic instructions to find reasoning errors.\n\n5. **Transfer validation.** We'd test whether flaw-detection performance on planted flaws predicts evaluator performance on naturally occurring argument weaknesses. Weak correlation would be a significant negative result -- it would mean planted flaws are too different from organic ones to serve as training signal, and the field should look to alternative labeling strategies.\n\n## Outlook\n\nWe don't yet know whether planted flaws can be made realistic enough to serve as useful training signal for detecting organic reasoning failures. The deliverables would be the labeled corpus, an insertion pipeline others could extend, and measurements of whether planted-flaw performance transfers to natural safety arguments -- informing whether labs should invest in this approach for monitor training."}];
+
+let currentIdx = 0;
+const state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+        // Defensive: ensure every question has a record.
+        for (const q of QUESTIONS) {
+          if (!parsed.responses[q.prompt_id]) {
+            parsed.responses[q.prompt_id] = { winner: null, notes: "" };
+          } else if (parsed.responses[q.prompt_id].notes === undefined) {
+            parsed.responses[q.prompt_id].notes = "";
+          }
+        }
+        return parsed;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const fresh = { batch_id: BATCH_ID, responses: {} };
+  for (const q of QUESTIONS) {
+    fresh.responses[q.prompt_id] = { winner: null, notes: "" };
+  }
+  return fresh;
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function renderMd(text) {
+  if (!text) return '<span style="color: var(--muted);">(no text)</span>';
+  return marked.parse(text);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderOnboardingSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="onboarding-section">
+      <div class="sec-title">${escapeHtml(sec.title)}</div>
+      <div class="sec-body">${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderHelpSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="help-section">
+      <div class="h-title">${escapeHtml(sec.title)}</div>
+      <div>${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderOnboarding() {
+  const card = document.getElementById('onboarding-card');
+  card.innerHTML = `<h2>Instructions</h2>${renderOnboardingSectionsHTML()}
+    <div class="onboarding-start-wrap">
+      <button class="onboarding-start-btn" onclick="startEval()">Start ranking &rarr;</button>
+    </div>`;
+  document.getElementById('help-content').innerHTML = renderHelpSectionsHTML();
+}
+
+const ONBOARDING_SEEN_KEY = 'pairwise_onboarding_seen_' + BATCH_ID;
+const PAIRWISE_REG_KEY = 'pairwise_reg_' + BATCH_ID;
+
+/* Returns {name, email, registered_at, ...} or null.
+ * Reads in-page registration first; falls back to any reg_prod_* key set by
+ * the prod registration_page.html (publish_pairwise_to_prod). */
+function getRegistration() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_REG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('reg_prod_')) {
+        const v = localStorage.getItem(k);
+        if (v) return JSON.parse(v);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function validEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function onRegInput() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const btn = document.getElementById('reg-submit-btn');
+  const err = document.getElementById('reg-error');
+  err.textContent = (email && !validEmail(email)) ? 'That doesn’t look like a valid email.' : '';
+  btn.disabled = !(name && validEmail(email));
+}
+
+function submitRegistration() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  if (!name || !validEmail(email)) return;
+  const reg = { name: name, email: email, registered_at: new Date().toISOString() };
+  try { localStorage.setItem(PAIRWISE_REG_KEY, JSON.stringify(reg)); } catch (e) {}
+  document.getElementById('registration-screen').classList.add('hidden');
+  if (hasSeenOnboarding()) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    refreshProgress();
+  } else {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  }
+}
+
+function hasSeenOnboarding() {
+  try { return !!localStorage.getItem(ONBOARDING_SEEN_KEY); } catch (e) { return false; }
+}
+
+function startEval() {
+  document.getElementById('onboarding-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, '1'); } catch (e) {}
+  refreshProgress();
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* Decide which screen to show first.
+ * In prod (publish_pairwise_to_prod injects `const EVAL_ID = ...`) the standalone
+ * registration_page.html already collected the rater info before redirecting here,
+ * so we skip our in-page registration. Onboarding still shows on the first visit
+ * (or any visit before "Start ranking →" has been clicked). */
+function initFlow() {
+  const inProd = (typeof EVAL_ID !== 'undefined');
+  if (!inProd && !getRegistration()) {
+    document.getElementById('registration-screen').classList.remove('hidden');
+    setTimeout(() => document.getElementById('reg-name').focus(), 50);
+  } else if (!hasSeenOnboarding()) {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  } else {
+    document.getElementById('eval-screen').classList.remove('hidden');
+  }
+}
+
+function showHelp() {
+  document.getElementById('help-overlay').classList.remove('hidden');
+}
+function hideHelp() {
+  document.getElementById('help-overlay').classList.add('hidden');
+}
+
+function renderPager() {
+  const host = document.getElementById('pager');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const answered = state.responses[q.prompt_id] && state.responses[q.prompt_id].winner;
+    const cls = ['pager-dot'];
+    if (i === currentIdx) cls.push('current');
+    if (answered) cls.push('answered');
+    html += `<span class="${cls.join(' ')}" title="Pair ${i + 1}${answered ? ' — winner picked' : ''}" onclick="goTo(${i})">${i + 1}</span>`;
+  });
+  host.innerHTML = html;
+}
+
+function renderQuestion() {
+  const q = QUESTIONS[currentIdx];
+  const resp = state.responses[q.prompt_id] || {};
+
+  document.getElementById('idea-grid').innerHTML = `
+    <div class="idea-card" data-side="A">
+      <div class="card-head">
+        <span class="idea-badge a">A</span>
+        <div class="idea-title">${escapeHtml(q.a_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.a_text)}</div>
+    </div>
+    <div class="idea-card" data-side="B">
+      <div class="card-head">
+        <span class="idea-badge b">B</span>
+        <div class="idea-title">${escapeHtml(q.b_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.b_text)}</div>
+    </div>`;
+
+  refreshPrefButtons(resp.winner);
+  document.getElementById('notes-current').value = resp.notes || '';
+  document.getElementById('prev-btn').disabled = currentIdx <= 0;
+  // Last pair: "Review →" leads to summary. Earlier pairs: standard Next.
+  const isLast = currentIdx >= QUESTIONS.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.disabled = false;
+  nextBtn.textContent = isLast ? 'Review →' : 'Next →';
+}
+
+function refreshPrefButtons(choice) {
+  document.querySelectorAll('#pref-row .pref-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.choice === choice);
+  });
+}
+
+function pick(choice) {
+  if (!['A', 'B', 'tie'].includes(choice)) return;
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].winner = choice;
+  refreshPrefButtons(choice);
+  saveState();
+  renderPager();
+  refreshProgress();
+}
+
+function onNotesInput(value) {
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].notes = value;
+  saveState();
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= QUESTIONS.length) return;
+  currentIdx = idx;
+  renderQuestion();
+  renderPager();
+  refreshProgress();
+}
+
+function navPrev() {
+  if (!document.getElementById('summary-screen').classList.contains('hidden')) {
+    exitSummary();
+    return;
+  }
+  goTo(currentIdx - 1);
+}
+function navNext() {
+  if (currentIdx >= QUESTIONS.length - 1) {
+    showSummary();
+  } else {
+    goTo(currentIdx + 1);
+  }
+}
+
+const PREF_LABEL = { 'A': 'A is better', 'B': 'B is better', 'tie': 'Both are equal' };
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const n = countAnswered();
+  document.getElementById('summary-sub').textContent = `${n} of ${total} answered. Review your picks below, then submit.`;
+  const list = document.getElementById('summary-list');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;
+    const cls = choice ? '' : 'unanswered';
+    const aWin = choice === 'A' || choice === 'tie';
+    const bWin = choice === 'B' || choice === 'tie';
+    const pickClass = choice === 'tie' ? 'tie' : (choice ? '' : 'none');
+    const pickLabel = choice ? PREF_LABEL[choice] : 'Not answered';
+    html += `<div class="summary-row ${cls}" onclick="jumpFromSummary(${i})">
+      <div class="pair-no">Pair ${i + 1}</div>
+      <div class="summary-titles">
+        <div class="summary-title ${aWin ? 'winner' : ''}"><span class="idea-badge">A</span><span class="ttext">${escapeHtml(q.a_title)}</span></div>
+        <div class="summary-title ${bWin ? 'winner' : ''}"><span class="idea-badge">B</span><span class="ttext">${escapeHtml(q.b_title)}</span></div>
+      </div>
+      <div class="summary-pick ${pickClass}">${pickLabel}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function showSummary() {
+  document.getElementById('eval-screen').classList.add('hidden');
+  document.getElementById('summary-screen').classList.remove('hidden');
+  renderSummary();
+  refreshProgress();
+}
+
+function exitSummary() {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  // Land back on the last pair so Prev/Next still make sense.
+  goTo(Math.min(currentIdx, QUESTIONS.length - 1));
+}
+
+function jumpFromSummary(idx) {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  goTo(idx);
+}
+
+function countAnswered() {
+  let n = 0;
+  for (const q of QUESTIONS) {
+    const r = state.responses[q.prompt_id];
+    if (r && r.winner) n++;
+  }
+  return n;
+}
+
+function refreshProgress() {
+  const n = countAnswered();
+  const total = QUESTIONS.length;
+  const pct = total === 0 ? 0 : Math.round((n / total) * 100);
+  const onSummary = !document.getElementById('summary-screen').classList.contains('hidden');
+  document.getElementById('topbar-sub').textContent = onSummary
+    ? `Summary · ${n} of ${total} answered`
+    : `Pair ${currentIdx + 1} of ${total} · ${n} of ${total} answered`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  for (const id of ['submit-btn', 'summary-submit-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = (n < total);
+    btn.textContent = `Submit (${n} / ${total})`;
+  }
+}
+
+function downloadResults() {
+  const rankings = QUESTIONS.map(q => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;  // 'A' | 'B' | 'tie' | null
+    let ratings, comparison;
+    if (choice === 'A')      { ratings = { 0: 10, 1: 0 };  comparison = 'A>B'; }
+    else if (choice === 'B') { ratings = { 0: 0,  1: 10 }; comparison = 'B>A'; }
+    else if (choice === 'tie') { ratings = { 0: 5, 1: 5 }; comparison = '≈'; }
+    else                       { ratings = { 0: null, 1: null }; comparison = null; }
+    return {
+      prompt_id: q.prompt_id,
+      proposal_name: q.proposal_name,
+      prompt: q.prompt_text,
+      idea_titles: [q.a_title, q.b_title],
+      choice: choice,
+      notes: r.notes || "",
+      // v5-compatible bookkeeping (so existing prod firebase write doesn't care).
+      order: [0, 1],
+      ratings: ratings,
+      comparisons: comparison ? { "1-2": comparison } : {},
+      pairwise_choice: choice ? { choice: choice } : null,
+    };
+  });
+  const out = {
+    timestamp: new Date().toISOString(),
+    batch_id: BATCH_ID,
+    batch_title: BATCH_TITLE,
+    storage_key: STORAGE_KEY,
+    registration: getRegistration(),
+    total_prompts: QUESTIONS.length,
+    ranked: countAnswered(),
+    rankings: rankings,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pairwise_${BATCH_ID}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const helpOpen = !document.getElementById('help-overlay').classList.contains('hidden');
+  if (e.key === 'Escape') {
+    if (helpOpen) { e.preventDefault(); hideHelp(); }
+    return;
+  }
+  if (helpOpen) return;
+  if (e.key === '?') { e.preventDefault(); showHelp(); return; }
+  // Lock keyboard controls until we're on the eval screen.
+  if (document.getElementById('eval-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); navPrev(); }
+  else if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); navNext(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); pick('A'); }
+  else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); pick('B'); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); pick('tie'); }
+});
+
+renderOnboarding();
+renderPager();
+renderQuestion();
+refreshProgress();
+initFlow();
+
+/* ==== PROD INJECTIONS (pairwise) ==== */
+
+/* ---- Firebase ---- */
+let _firestoreDb = null;
+
+function getFirestore() {
+    if (_firestoreDb) return _firestoreDb;
+    if (typeof FIREBASE_CONFIG === 'undefined' || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured — submissions will only be saved locally');
+        return null;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _firestoreDb = firebase.firestore();
+        return _firestoreDb;
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+        return null;
+    }
+}
+
+async function submitToFirebase(results) {
+    const db = getFirestore();
+    if (!db) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    const doc = {
+        registration: reg,
+        rankings: results,
+        eval_id: EVAL_ID,
+        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+    };
+
+    try {
+        const ref = await db.collection('evaluations').doc(EVAL_ID)
+            .collection('submissions').add(doc);
+        console.log('Submitted to Firebase:', ref.id);
+        return { success: true, id: ref.id };
+    } catch(e) {
+        console.error('Firebase submission failed:', e);
+        return { success: false, reason: e.message };
+    }
+}
+
+
+/* ---- EmailJS ---- */
+let _emailjsInitialized = false;
+
+function initEmailJS() {
+    if (_emailjsInitialized) return true;
+    if (typeof EMAILJS_CONFIG === 'undefined' || EMAILJS_CONFIG.public_key === 'REPLACE_ME') {
+        console.warn('EmailJS not configured — results will not be emailed');
+        return false;
+    }
+    if (typeof emailjs === 'undefined') {
+        console.warn('EmailJS SDK not loaded');
+        return false;
+    }
+    try {
+        emailjs.init(EMAILJS_CONFIG.public_key);
+        _emailjsInitialized = true;
+        return true;
+    } catch(e) {
+        console.error('EmailJS init failed:', e);
+        return false;
+    }
+}
+
+async function sendResultsEmail(results) {
+    if (!initEmailJS()) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
+
+    const ranked = results.ranked || 0;
+    const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
+
+    const templateParams = {
+        to_name: reg.name,
+        to_email: reg.email,
+        eval_id: EVAL_ID,
+        summary: `${ranked} of ${total} prompts ranked`,
+        results_json: dataUri,
+    };
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.service_id,
+            EMAILJS_CONFIG.template_id,
+            templateParams
+        );
+        console.log('Results emailed to', reg.email);
+        return { success: true };
+    } catch(e) {
+        console.error('Email send failed:', e);
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
+    }
+}
+
+
+/* ---- Pairwise Eval Page: Prod Overrides ----
+ * Drop-in counterpart to 8_human_ranking_ui_prod/scripts/prod_fragments/eval_overrides.js,
+ * but tailored to the pairwise UI globals defined by generate_pairwise_ui.py
+ * (STORAGE_KEY, EVAL_ID, state, saveState, downloadResults, countAnswered, QUESTIONS).
+ */
+
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+const _regData = localStorage.getItem(REG_KEY);
+if (!_regData) {
+    window.location.href = '../';
+}
+
+function getRegistration() {
+    try {
+        const saved = localStorage.getItem(REG_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+}
+
+function hashEmail(email) {
+    let hash = 5381;
+    for (let i = 0; i < email.length; i++) {
+        hash = ((hash << 5) + hash) + email.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+/* Namespace localStorage by eval + rater, then reload state from the new key. */
+(function () {
+    const reg = getRegistration();
+    if (reg) {
+        STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+                    for (const k of Object.keys(state.responses)) {
+                        if (parsed.responses[k]) state.responses[k] = parsed.responses[k];
+                    }
+                    if (typeof renderQuestions === 'function') renderQuestions();
+                    if (typeof refreshProgress === 'function') refreshProgress();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+})();
+
+/* Wrap downloadResults so it (a) writes locally, (b) submits to Firebase,
+ * (c) emails the rater their JSON. */
+const _originalDownloadResults = downloadResults;
+downloadResults = async function () {
+    const output = _originalDownloadResults();
+    output.eval_id = EVAL_ID;
+    output.registration = getRegistration();
+
+    const statusEl = document.getElementById('submission-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--text-secondary)">Submitting...</span>';
+        statusEl.classList.remove('hidden');
+    }
+
+    const fbResult = await submitToFirebase(output);
+    const emailResult = await sendResultsEmail(output);
+
+    if (statusEl) {
+        const parts = [];
+        if (fbResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Saved to server</span>');
+        } else if (fbResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Server not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Server save failed — your download has your data</span>');
+        }
+        const reg = getRegistration();
+        if (emailResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Results emailed to ' + (reg ? reg.email : '?') + '</span>');
+        } else if (emailResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
+        }
+        statusEl.innerHTML = parts.join('<br>');
+    }
+};
+
+/* Auto-save partial progress to Firebase (debounced 30s) on every state change. */
+let _autoSaveTimer = null;
+const _originalSaveState = saveState;
+saveState = function () {
+    _originalSaveState();
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(async () => {
+        const partial = {
+            timestamp: new Date().toISOString(),
+            eval_id: EVAL_ID,
+            batch_id: BATCH_ID,
+            batch_title: BATCH_TITLE,
+            registration: getRegistration(),
+            total_prompts: QUESTIONS.length,
+            ranked: countAnswered(),
+            is_partial: true,
+            responses: state.responses,
+        };
+        await submitToFirebase(partial);
+    }, 30000);
+};
+
+
+/* ==== END PROD INJECTIONS ==== */
+</script>
+</body>
+</html>

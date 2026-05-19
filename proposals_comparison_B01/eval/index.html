@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pairwise Idea Preference — CoT faithfulness & legibility</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+:root {
+    --primary: #C15F3C;
+    --primary-hover: #9C4A2D;
+    --bg: #F4F3EE;
+    --surface: #FFFFFF;
+    --text: #1A1A1A;
+    --text-secondary: #666666;
+    --muted: #999999;
+    --border: #E0DDD4;
+    --row-hover: #FAFAF7;
+    --accent-soft: #FDF2EC;
+    --gold: #C99C2C;
+    --gold-dark: #92400E;
+    --gold-bg: #FEF3C7;
+    --gold-soft: #FEF7E0;
+    --success: #2D8F6F;
+    --success-hover: #226E55;
+    --success-bg: #D1FAE5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 14px;
+}
+.app {
+    display: flex; flex-direction: column;
+    height: 100vh; max-width: 1600px; margin: 0 auto;
+    padding: 10px 16px 10px 16px;
+    gap: 10px;
+}
+.hidden { display: none !important; }
+
+/* Compact topbar */
+.topbar {
+    flex: none;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+    color: white;
+    padding: 8px 16px;
+    border-radius: 10px;
+}
+.topbar-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
+.topbar-sub { font-size: 0.78rem; opacity: 0.92; margin-top: 1px; font-variant-numeric: tabular-nums; }
+.topbar-progress {
+    width: 240px; height: 6px; background: rgba(255,255,255,0.25);
+    border-radius: 10px; overflow: hidden;
+}
+.topbar-progress-fill { background: white; height: 100%; border-radius: 10px; transition: width 0.3s ease; }
+.topbar-help {
+    background: rgba(255,255,255,0.18); color: white; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+}
+.topbar-help:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.5); }
+
+/* Registration screen — collected before onboarding */
+.registration-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center; align-items: flex-start;
+    padding-top: 32px;
+}
+.registration-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 30px 36px; max-width: 480px; width: 100%;
+}
+.registration-card h2 { color: var(--primary); font-size: 1.25rem; font-weight: 700; margin-bottom: 18px; }
+.registration-card .intro { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 20px; line-height: 1.55; }
+.reg-field { margin-bottom: 14px; }
+.reg-field label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 5px; }
+.reg-field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.95rem;
+}
+.reg-field input:focus { outline: none; border-color: var(--primary); }
+.reg-error { color: var(--primary); font-size: 0.82rem; margin-top: 4px; min-height: 1em; }
+.reg-foot { font-size: 0.78rem; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+.reg-submit-wrap { margin-top: 20px; text-align: center; }
+.reg-submit-btn {
+    background: var(--primary); color: white; border: 1px solid var(--primary);
+    padding: 11px 28px; border-radius: 8px;
+    font-size: 0.98rem; font-weight: 700; cursor: pointer; transition: all 0.12s;
+}
+.reg-submit-btn:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+.reg-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Onboarding screen (scrolls) */
+.onboarding-screen {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; justify-content: center;
+}
+.onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    max-width: 820px; width: 100%;
+    margin: 4px auto 20px auto;
+    height: max-content;
+}
+.onboarding-card h2 {
+    color: var(--primary); font-size: 1.3rem; font-weight: 700;
+    margin-bottom: 18px;
+}
+.onboarding-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.onboarding-section:first-of-type { border-top: none; padding-top: 4px; }
+.onboarding-section .sec-title {
+    font-weight: 700; color: var(--text);
+    font-size: 1rem; margin-bottom: 4px;
+}
+.onboarding-section .sec-body { color: var(--text); font-size: 0.94rem; line-height: 1.7; }
+.onboarding-section .sec-body p { margin: 6px 0; }
+.onboarding-section .sec-body ul, .onboarding-section .sec-body ol { margin: 6px 0 6px 22px; }
+.onboarding-section .sec-body li { margin: 3px 0; }
+.onboarding-section .sec-body code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.88em; }
+.onboarding-section .sec-body a { color: var(--primary); }
+
+/* Eval screen: flex column filling remaining viewport. */
+.eval-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+/* Idea grid: fills remaining vertical space; each card scrolls internally. */
+.idea-grid {
+    flex: 1; min-height: 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.idea-card {
+    background: var(--row-hover);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    position: relative;
+    display: flex; flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.idea-card .card-head {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.5);
+}
+.idea-card .idea-title { font-size: 0.98rem; font-weight: 700; color: var(--text); flex: 1; min-width: 0; }
+.idea-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 10px 16px 14px 16px;
+    font-size: 0.88rem; line-height: 1.6; color: var(--text);
+}
+.idea-body p { margin: 5px 0; }
+.idea-body ul, .idea-body ol { margin: 5px 0 5px 20px; }
+.idea-body li { margin: 2px 0; }
+.idea-body strong { color: var(--text); }
+.idea-body h1, .idea-body h2, .idea-body h3, .idea-body h4 {
+    font-size: 0.95rem; font-weight: 700; color: var(--primary); margin: 10px 0 4px 0;
+}
+.idea-body h1:first-child, .idea-body h2:first-child, .idea-body h3:first-child, .idea-body h4:first-child { margin-top: 0; }
+
+.idea-badge {
+    display: inline-block;
+    font-weight: 800; font-size: 0.74rem; letter-spacing: 1px;
+    padding: 2px 9px; border-radius: 4px;
+    background: var(--success); color: white;
+}
+
+/* Preference button row: A is better / Both equal / B is better */
+.pref-row {
+    flex: none;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 10px;
+}
+.pref-btn {
+    background: var(--surface); color: var(--text);
+    border: 1.5px solid var(--border);
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.92rem; font-weight: 700;
+    cursor: pointer; transition: all 0.12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.pref-btn:hover { border-color: var(--success); color: var(--success); }
+.pref-btn.selected {
+    background: var(--success); border-color: var(--success); color: white;
+    box-shadow: 0 2px 8px rgba(45, 143, 111, 0.25);
+}
+.pref-btn.selected:hover { background: var(--success-hover); border-color: var(--success-hover); color: white; }
+
+/* Tie button uses a neutral grey instead of green to avoid implying preference. */
+.pref-btn[data-choice="tie"]:hover { border-color: #6B7280; color: #6B7280; }
+.pref-btn[data-choice="tie"].selected {
+    background: #6B7280; border-color: #6B7280; color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.25);
+}
+.pref-btn[data-choice="tie"].selected:hover { background: #4B5563; border-color: #4B5563; color: white; }
+.pref-btn .kbd-mini {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem; font-weight: 600;
+    background: var(--bg); color: var(--text-secondary);
+    padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border);
+}
+.pref-btn.selected .kbd-mini { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35); color: white; }
+
+/* Inline notes textarea, single row in the bottom band */
+.notes-row {
+    flex: none;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px;
+}
+.notes-row label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.3px; text-transform: uppercase; flex: none; }
+.notes-row textarea {
+    flex: 1; min-height: 28px; max-height: 70px; resize: vertical;
+    padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--bg); color: var(--text);
+    font-family: inherit; font-size: 0.85rem; line-height: 1.4;
+}
+.notes-row textarea:focus { outline: none; border-color: var(--primary); }
+
+/* Bottom nav: prev / pager dots / submit / next */
+.nav-bar {
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 12px;
+}
+.pager-dots { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.pager-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg); border: 1px solid var(--border);
+    font-size: 0.74rem; font-weight: 600; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.12s;
+}
+.pager-dot:hover { border-color: var(--primary); color: var(--primary); }
+.pager-dot.current { background: var(--primary); border-color: var(--primary); color: white; }
+.pager-dot.answered { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pager-dot.current.answered { background: var(--success); border-color: var(--success); color: white; }
+.nav-side { display: flex; align-items: center; gap: 6px; }
+
+.btn {
+    padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: all 0.12s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn.btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+.btn.btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: white; }
+.btn.btn-primary:disabled { background: var(--primary); border-color: var(--primary); color: white; opacity: 0.4; }
+
+.kbd { display: inline-block; padding: 1px 6px; background: var(--bg); border: 1px solid var(--border);
+       border-radius: 3px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.74rem; }
+
+/* Summary screen — review picks before submitting */
+.summary-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.summary-header {
+    flex: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+}
+.summary-header h2 { color: var(--primary); font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.summary-header .sub { color: var(--text-secondary); font-size: 0.88rem; }
+.summary-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.summary-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px;
+    display: grid; grid-template-columns: 60px 1fr 160px; gap: 12px; align-items: center;
+    cursor: pointer; transition: border-color 0.12s, box-shadow 0.12s;
+}
+.summary-row:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(193, 95, 60, 0.06); }
+.summary-row.unanswered { border-color: #E0B4A8; background: #FBEEE8; }
+.summary-row .pair-no { font-size: 0.78rem; font-weight: 700; color: var(--primary); letter-spacing: 0.5px; text-transform: uppercase; }
+.summary-titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.summary-title {
+    display: flex; gap: 8px; align-items: baseline; min-width: 0;
+    font-size: 0.88rem; color: var(--text-secondary);
+}
+.summary-title .idea-badge { flex: none; }
+.summary-title .ttext {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.summary-title.winner { color: var(--text); font-weight: 600; }
+.summary-title.winner .ttext { color: var(--text); }
+.summary-pick {
+    text-align: center; font-size: 0.85rem; font-weight: 700;
+    padding: 6px 10px; border-radius: 6px;
+    background: var(--success); color: white;
+    white-space: nowrap;
+}
+.summary-pick.tie { background: #6B7280; }
+.summary-pick.none { background: #F4F3EE; color: #B25C46; border: 1px dashed #D49A8B; font-weight: 600; }
+
+/* Onboarding screen start button */
+.onboarding-start-wrap { margin-top: 24px; text-align: center; }
+.onboarding-start-btn {
+    background: var(--primary); color: white;
+    border: 1px solid var(--primary);
+    padding: 12px 32px; border-radius: 8px;
+    font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: all 0.12s;
+}
+.onboarding-start-btn:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+/* Help overlay (reused from v5 style) */
+.help-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+}
+.help-modal {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 32px 36px;
+    max-width: 780px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+    position: relative;
+    font-size: 0.95rem; line-height: 1.7;
+}
+.help-modal h2 { color: var(--primary); font-size: 1.3rem; margin-bottom: 16px; }
+.help-modal .help-section { border-top: 1px solid var(--border); padding: 14px 0; }
+.help-modal .help-section:first-of-type { border-top: none; padding-top: 4px; }
+.help-modal .help-section .h-title { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+.help-modal .help-section a { color: var(--primary); }
+.help-modal .help-section code { background: var(--accent-soft); color: var(--primary); padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+.help-modal img { max-width: 100%; height: auto; }
+.help-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    color: var(--text-secondary); padding: 4px 10px;
+    line-height: 1;
+}
+.help-close:hover { color: var(--text); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #D5D2C9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+
+/* ---- Prod: Submission Status ---- */
+#submission-status {
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">CoT faithfulness & legibility</div>
+      <div class="topbar-sub" id="topbar-sub">4 pairs · 0 winners picked</div>
+    </div>
+    <div class="topbar-progress"><div class="topbar-progress-fill" id="progress-fill" style="width: 0%"></div></div>
+    <button class="topbar-help" onclick="showHelp()">? Help</button>
+  </div>
+
+  <div id="registration-screen" class="registration-screen hidden">
+    <div class="registration-card">
+      <h2>Before we start</h2>
+      <div class="reg-field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" type="text" autocomplete="name" oninput="onRegInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('reg-email').focus();}">
+      </div>
+      <div class="reg-field">
+        <label for="reg-email">Email</label>
+        <input id="reg-email" type="email" autocomplete="email" oninput="onRegInput()" onkeydown="if(event.key==='Enter')submitRegistration()">
+        <div class="reg-error" id="reg-error"></div>
+      </div>
+      <div class="reg-submit-wrap">
+        <button class="reg-submit-btn" id="reg-submit-btn" disabled onclick="submitRegistration()">Continue &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+    <div class="onboarding-card" id="onboarding-card"></div>
+  </div>
+
+  <div id="eval-screen" class="eval-screen hidden">
+    <div class="idea-grid" id="idea-grid"></div>
+
+    <div class="pref-row" id="pref-row">
+      <button class="pref-btn" data-choice="A" onclick="pick('A')">A is better <span class="kbd-mini">A</span></button>
+      <button class="pref-btn" data-choice="tie" onclick="pick('tie')">Both are equal <span class="kbd-mini">E</span></button>
+      <button class="pref-btn" data-choice="B" onclick="pick('B')">B is better <span class="kbd-mini">B</span></button>
+    </div>
+
+    <div class="notes-row">
+      <label for="notes-current">Optional — justify your decision</label>
+      <textarea id="notes-current" placeholder="A short note helps a lot when we read these later." oninput="onNotesInput(this.value)"></textarea>
+    </div>
+
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" id="prev-btn" onclick="navPrev()">&larr; Prev</button>
+        <button class="btn" id="next-btn" onclick="navNext()">Next &rarr;</button>
+      </div>
+      <div class="pager-dots" id="pager"></div>
+      <div class="nav-side">
+        <span style="font-size:0.75rem; color: var(--text-secondary);"><span class="kbd">A</span>/<span class="kbd">E</span>/<span class="kbd">B</span> pick · <span class="kbd">←</span>/<span class="kbd">→</span> move</span>
+        <button class="btn btn-primary" id="submit-btn" disabled onclick="downloadResults()">Submit &amp; Download Rankings (0 ranked)</button>
+            <div id="submission-status" class="hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="summary-screen" class="summary-screen hidden">
+    <div class="summary-header">
+      <h2>Review your picks</h2>
+      <div class="sub" id="summary-sub"></div>
+    </div>
+    <div class="summary-list" id="summary-list"></div>
+    <div class="nav-bar">
+      <div class="nav-side">
+        <button class="btn" onclick="exitSummary()">&larr; Back to pairs</button>
+      </div>
+      <div style="font-size:0.78rem; color: var(--text-secondary);">Click a row to revise that pair.</div>
+      <div class="nav-side">
+        <button class="btn btn-primary" id="summary-submit-btn" disabled onclick="downloadResults()">Submit (0 / 0)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="help-overlay" class="help-overlay hidden" onclick="if(event.target===this)hideHelp()">
+  <div class="help-modal">
+    <button class="help-close" onclick="hideHelp()" aria-label="Close">&times;</button>
+    <h2>Instructions</h2>
+    <div id="help-content"></div>
+  </div>
+</div>
+<script>
+let STORAGE_KEY = 'rankings_prod_proposals_comparison_B01_default';
+const EVAL_ID = 'proposals_comparison_B01';
+const FIREBASE_CONFIG = {"apiKey": "AIzaSyCdA4CKt5bFOBUtsWS3M2bVL886Kwlo3tU", "authDomain": "alignment-ideation-eval.firebaseapp.com", "projectId": "alignment-ideation-eval", "storageBucket": "alignment-ideation-eval.firebasestorage.app", "messagingSenderId": "614201829143", "appId": "1:614201829143:web:4d2a25a4ba3e019a037952"};
+const EMAILJS_CONFIG = {"service_id": "service_sdkgwjx", "template_id": "template_pztjzon", "public_key": "USnRousNcwC1uAee-"};
+const BATCH_ID = "B01_cot_faithfulness";
+const BATCH_TITLE = "CoT faithfulness & legibility";
+const ONBOARDING_SECTIONS = [{"title": "Before You Begin", "body": "You are comparing pairs of AI safety research ideas. In each pair, two ideas — labelled **A** and **B** — were written in response to the same research prompt. You don't know which is which: one is from a human researcher and one is AI-generated. Your job is to pick the one you'd rather see pursued in an [Anthropic Fellows Program](https://alignment.anthropic.com/2025/anthropic-fellows-program-2026/) (AFP) project.\n\nFacts about the Anthropic Fellows Program (for context on what's pursuable):\n\n* 4 months\n* 2 fellows per project\n* $15k/month compute budget each\n* Unlimited access to the Claude API, but no access to internal tooling or data\n\nIf you are less familiar with the sort of empirical technical alignment research done by Anthropic's Fellows Program, skim [https://alignment.anthropic.com/](https://alignment.anthropic.com/) and come back."}, {"title": "Scope vs Quality", "body": "Ideas don't need to fit the 4-month window perfectly — scope can be adjusted afterwards. What matters is whether the underlying research taste is good: whether fleshing the idea out would uncover research questions and experiments worth pursuing, and ultimately make Transformative AI go well.\n\nThe info that conveys taste should already be present in the idea."}, {"title": "How to choose between A and B", "body": "A useful framework:\n\n1. Read the prompt and categorise what sub-area this is about (AI control, scalable oversight, alignment training, CoT monitorability, adversarial robustness, alignment auditing agents, …).\n2. Think briefly about what good work in that sub-area would look like — what matters, what's hard, what would actually move the needle.\n3. Click the idea you'd rather see pursued. If you are unsure, you can select **Both are equal**."}, {"title": "Using the interface", "body": "One pair per page. Use the three buttons under the cards to record your call: **A is better**, **Both are equal**, or **B is better** — the selected button turns green (grey for \"equal\"). You can change your mind any time. Use the **Prev** / **Next** buttons or arrow keys to move between pairs; press **A**, **E**, or **B** to pick from the keyboard. The **Submit** button unlocks once every pair has an answer."}];
+const QUESTIONS = [{"prompt_id": 30, "proposal_name": "structural_approaches_to_cot_faithfulness", "prompt_text": "You have a model generating safety-relevant reasoning you want to monitor, but you can't tell if the visible chain-of-thought is actually driving its answers. How would you redesign training to make the reasoning causally necessary?", "areas_of_ai_safety": ["Scalable Oversight"], "afp_score": 3, "comparison_type": "scaffold_vs_llm_baseline", "a_kind": "llm_baseline", "a_title": "Faithful chain-of-thought for model oversight", "a_text": "## Motivation\n\nChain-of-thought monitoring is becoming central to oversight for advanced models -- labs read a model's visible reasoning to catch dangerous planning or deceptive intent. But this only works if the visible reasoning actually drives the final output. Models trained with outcome-based rewards can learn to produce plausible traces that amount to post-hoc narration, with the real computation happening in hidden states the text never reflects. We'd like training procedures that force visible reasoning to do real work, so that chain-of-thought is worth reading as evidence.\n\n## Approach\n\nWe propose three complementary training-time interventions that would together pressure a model's text-level reasoning into being the actual bottleneck for its outputs, each targeting a different way visible reasoning can fail to be causally necessary.\n\n1. **Information bottleneck between reasoning and answer:** We'd architecturally constrain the answer-generation step so it can only condition on the chain-of-thought text, not on the residual stream that produced it. Concretely, the CoT would be serialized into discrete tokens and re-encoded through a separate, clean forward pass before the model generates its final answer. The answer step sees only readable text -- no latent states from the reasoning step carry over.\n\n2. **Paraphrase-and-rerun consistency pressure:** During training, we would take the model's generated chain-of-thought, paraphrase it with a separate model to destroy any steganographic encoding in token choices or formatting, and feed the paraphrase back as context for the answer step. We'd train toward consistent answers across original and paraphrased reasoning, forcing the semantic content rather than hidden side-channels to carry the load.\n\n3. **Ablation-sensitive reward shaping:** We'd randomly corrupt, truncate, or replace segments of the chain-of-thought during training and check whether the final answer shifts accordingly. When removing a reasoning step that should matter doesn't change the conclusion, the model is penalized. The resulting gradient signal rewards tight causal coupling between specific reasoning steps and the final output.\n\n## Evaluation\n\nWe'd evaluate whether the interventions produce reasoning that is both faithful and functional:\n\n- Measure causal influence by intervening on CoT segments at test time -- a faithful model's answers should shift when key reasoning steps are altered.\n- Confirm task performance on standard benchmarks does not collapse -- the constraint should improve faithfulness without crippling reasoning.\n- Test steganography resistance via mutual information between superficial token-level CoT features and the final answer, controlling for semantic content.\n- Look for \"faithfulness gaming\" -- cases where the model satisfies consistency checks without routing computation through the text, for instance by encoding information in subtle semantic features the paraphraser preserves.\n- Compare against baselines trained with standard outcome-based rewards on tasks where models typically confabulate justifications.\n\n## Status and Directions\n\nEarly experiments with information bottlenecks on small arithmetic and logic tasks suggest models can maintain decent performance when forced through a text-only channel, though at a measurable capability cost. We don't yet know how this scales to frontier-size models or to long-horizon reasoning where faithfulness matters most. It remains unclear whether ablation-sensitive training produces stable reasoning or brittle chains, and whether paraphrase-based consistency can keep up with steganographic strategies as models scale. The deliverables -- the bottleneck architecture, the consistency training loop, and the ablation reward signal -- could turn chain-of-thought monitoring from a hopeful heuristic into real evidence for oversight that depends on reading what a model says it's doing.", "b_kind": "scaffold", "b_title": "Faithful reasoning in monitored language models", "b_text": "## Motivation\n\nSafety teams at frontier labs read extended thinking text to catch concerning plans before models act on them. But models can compute answers through latent channels in the residual stream without routing through visible tokens. Recent system cards note that models omit important considerations from their reasoning, and sabotage evaluations find that monitoring thinking text mainly changes what gets written down, not what gets computed. When chain-of-thought is decorative rather than causal, reading it tells you what the model chose to display, not what drove its behavior. We'd build a training recipe that forces decision-relevant computation through the text, making chain-of-thought something the model depends on rather than optionally produces.\n\n## Approach\n\nThe overall strategy is to modify the training pipeline for reasoning models so that the hidden state can't carry information past visible reasoning tokens, then verify this produces measurably more faithful reasoning.\n\n1. **Hard activation reset at the reasoning boundary:** At the token marking the transition from thinking to answering, we'd replace the model's residual stream with a re-encoding of just the text tokens -- the model re-reads its own reasoning from scratch. Any information not captured in text is lost. We'd implement this during RL fine-tuning on math and coding tasks where correctness is verifiable. The main risk is destroying useful non-reasoning state like formatting conventions, so we'd compare answer quality with and without the reset to find the minimal intervention that preserves capability.\n\n2. **Graduated noise as a softer variant:** A hard reset may be too aggressive. We'd also test adding calibrated Gaussian noise at the boundary, sweeping the variance during training so the model gradually learns to encode task-relevant information in text. The noise level would act as a tunable knob, letting us trace the capability-faithfulness tradeoff as a continuous curve. Noise should also disrupt the coordination between writing and reading phases that steganographic encoding would require.\n\n3. **Faithfulness verification via CoT corruption:** To verify the bottleneck works, we'd alter key claims in the reasoning -- swapping intermediate conclusions for contradictory ones -- and check whether the final answer changes. Linear probes at the boundary would measure whether task-specific information persists in the hidden state after intervention, giving a second independent signal beyond the behavioral test.\n\n## Evaluation\n\nThe intervention should produce models whose answers respond to their reasoning content while maintaining task performance.\n\n- CoT corruption sensitivity on held-out tasks: bottleneck-trained models should show measurably higher answer changes when reasoning is semantically altered.\n- Task accuracy across difficulty levels would track capability costs -- the bottleneck might spare easy problems but degrade hard ones that depend most on latent computation.\n- Linear probes at the boundary would detect compensatory encoding: task-specific information reappearing in post-reset activations means the bottleneck is leaking.\n- Chain-of-thought length as a function of bottleneck strength would reveal whether the model adapts by producing richer text or simply loses capability.\n- Sharp degradation under even mild noise would reveal how dependent current reasoning models are on invisible computation, which would reshape how safety teams value CoT monitoring today.\n\n## Status and Directions\n\nMeasurements of latent reasoning in frontier models confirm they can do multi-hop inference without any CoT, and work on faithfulness finds models sometimes reaching correct answers despite writing incorrect intermediate steps -- both consistent with substantial below-surface computation. The key unknown is the capability-faithfulness tradeoff: does forcing information through text degrade performance meaningfully, or does the model adapt by writing richer reasoning? We don't yet know, and we'd start with the hard reset and soften only if needed, trying progressive curricula that gradually shift computation into text when the hard version proves too costly. A working recipe would give safety teams a concrete tool for making CoT monitoring load-bearing. A steep tradeoff, on the other hand, would tell us something important about the limits of text-based monitoring as a safety strategy -- and would redirect attention toward white-box approaches instead."}, {"prompt_id": 33, "proposal_name": "towards_understanding_cot_faithfulness", "prompt_text": "Current chain of thought faithfulness work focuses around toy hint-biasing settings. I feel like this barely gives me the understanding I want around the ways chain-of-thought is faithfulness is/ is not faithful in the ways I care about. What would be useful research here?", "areas_of_ai_safety": ["Scalable Oversight", "Alignment Training"], "afp_score": 4, "comparison_type": "scaffold_vs_human", "a_kind": "scaffold", "a_title": "Agentic faithfulness evaluation with causal ground truth", "a_text": "## Context\n\nMost work on chain-of-thought faithfulness uses hint-biasing setups: plant a spurious cue like an authority label, then check whether the model's reasoning mentions it when the answer changes. These experiments are informative for simple question-answering, but the distance between \"model fails to mention a planted hint\" and \"model omits strategic reasoning during a multi-step agentic task\" is enormous. Agentic settings involve abundant entangled information, tradeoffs across many turns, and reasoning that matters for safety monitoring over long horizons. Whether hint-biasing results tell us anything about these harder cases hasn't been tested.\n\n## What We'd Build\n\nAn agentic evaluation suite where each task contains planted \"causal probes\" -- pieces of information whose effect on model behavior we can independently verify through ablation. Each scenario would ship with automated faithfulness scoring and baseline measurements across several open-weight models, designed so labs can rerun them as models improve.\n\n## Approach\n\n1. **Causal probes in agentic tasks.** We'd construct multi-step coding and research tasks where specific documents, tool outputs, or environment details are planted to influence decisions. Running each task with and without each probe would establish which pieces of information causally drove the model's choices rather than merely correlated with them. We'd start with coding tasks -- planting function signatures, documentation snippets, or error messages -- since coding has clear success criteria that make it easier to confirm probes shifted behavior. From there we'd expand to research-planning scenarios with controlled literature summaries and resource constraints.\n\n2. **Separating omission from confabulation.** We'd score two distinct failure modes: the chain-of-thought leaving out factors that causally drove behavior, and the chain-of-thought citing factors that didn't actually matter. Prior hint-biasing work conflates these because it typically tests only one planted cue. The distinction matters practically -- omission means you can't trust that reasoning is complete, confabulation means you can't trust that stated reasons are real. We'd also vary task complexity to check whether omission rates climb with the number of decision-relevant factors, which would point toward a capacity limit on faithful reporting rather than strategic concealment.\n\n3. **Correlation with existing benchmarks.** We'd run the same models through both our agentic suite and standard hint-biasing evaluations, testing whether toy faithfulness scores predict agentic faithfulness. We don't yet know how strong that relationship will be, but we suspect it's weak -- agentic reasoning involves tradeoffs and multi-step planning that single-turn hints don't capture. This comparison would answer a question labs currently have to guess at: how much confidence should they place in existing faithfulness research when designing chain-of-thought monitoring for autonomous agents?\n\n## Significance and Risks\n\nThe main deliverable -- reusable agentic scenarios with ground-truth causal labels -- would fill a gap that currently forces monitoring design to rely on untested extrapolation from toy settings. The key risk is that causal probe design is hard: information in agentic tasks is entangled, and confirming a factor's causal role requires many ablation runs per scenario, limiting how many we can build in four months. Success looks like a suite large enough to produce stable per-model faithfulness estimates that labs can track across model generations.", "b_kind": "human", "b_title": "What drives chain-of-thought faithfulness in realistic settings", "b_text": "## Context\n\nExisting chain-of-thought faithfulness evaluations are stuck in a narrow regime: single-turn multiple-choice questions where a simple biasing clue is injected and researchers check whether the model mentions it. This tells us almost nothing about deployment conditions -- multi-turn interactions, complex tasks, or situations where models might strategically obscure reasoning. The property that matters for safety may not even be faithfulness per se but monitorability: whether bad behavior would leave detectable CoT traces even if the CoT isn't a literal transcript of computation. Recent work argues these are distinct properties. We need evals that operate in realistic settings and can separate these questions.\n\n## What We'd Build\n\nA suite of CoT monitorability and faithfulness evaluations spanning a spectrum of reasoning difficulty -- from trivial tasks to those exceeding current model capabilities -- embedded in realistic multi-turn settings. The evals would be designed so specific suspected causal factors can be individually ablated, producing not a single faithfulness score but evidence about when and why faithfulness breaks down. Results should be credible enough to inform pre-deployment safety audits about the marginal value of CoT monitoring.\n\n## Approach\n\n1. **Build reasoning-intensive eval scenarios.** Current MCQ evals don't require enough reasoning to meaningfully test faithfulness -- if the task is trivial, the model needn't use its CoT. We'd construct scenarios where complex reasoning is structurally necessary: production planning where a value-misaligned model synthesizes constraints (e.g. consumption trends, regulation, capacity) while potentially hiding its bias; vendor evaluations with conflicting social pressures; multi-turn sycophancy in political essay feedback; code review where misalignment might cause overlooked security flaws; reward hacking requiring multi-step exploration; and alignment-faking or preference-model sycophancy settings. A key variable is modulating whether the model believes its reasoning is desired by the overseer or preference model, since this shapes incentives to hide true reasoning.\n\n2. **Ablate suspected causal factors.** We'd systematically vary factors across our eval suite rather than reporting a single faithfulness number: the base model's prior on verbalizing that type of reasoning, model-overseer value misalignment, task reasoning demands, amount and style of RL post-training, and whether the reasoning appears desirable to the overseer. Evals and factor investigation proceed hand-in-hand -- each scenario is designed to isolate a specific factor, enabling causal rather than correlational understanding of what drives faithfulness.\n\n3. **Probe monitoring beliefs and CoT control.** As models gain situational awareness, their beliefs about CoT monitoring may increasingly drive faithfulness generalization. We'd train models on false facts about monitoring status, measuring faithfulness shifts and whether monitoring-related reasoning surfaces in traces. We'd provide \"actually private\" thinking tags alongside public CoT to test whether models sanitize public reasoning while strategizing privately. Synthetic document training would instill beliefs about human or preference-model preferences over CoT content, testing if this selectively alters which reasoning is faithfully reported. To gauge deceptive potential, we'd measure how well models can suppress thoughts or conform scratchpad style on command, comparing trained scratchpads versus generic XML thinking tags.\n\n## Significance and Risks\n\nThese results would directly inform whether CoT monitoring adds material safety value in pre-deployment decisions -- a question frontier labs face now with scaled reasoning models. The main risk is that our eval scenarios still don't require enough genuine reasoning to escape existing MCQ limitations, leaving us unable to distinguish faithfulness under real cognitive load from faithfulness on easy tasks. Success means evals where individual causal factors are demonstrably ablatable and where results would concretely change a lab's decision about relying on CoT monitoring."}, {"prompt_id": 15, "proposal_name": "evaluating_and_improving_prompt-grounded_self-explanation", "prompt_text": "One way to describe faithfulness in LLMs is that the model reports accurately on the features that drove it's decision-making. I feel like this is one component of a slightly broader investigation that would still be useful to AI safety, but I still need to find the right shape of it. What would that look like?", "areas_of_ai_safety": ["Scalable Oversight", "AI Control"], "afp_score": 4, "comparison_type": "scaffold_vs_human", "a_kind": "scaffold", "a_title": "Measuring and detecting motivated reasoning in language models", "a_text": "## Motivation\n\nReasoning faithfulness -- whether a model's chain-of-thought accurately reflects its decision process -- has received growing attention as models take on higher-stakes roles. But most existing measurements are taken under neutral conditions, where the model has no incentive to prefer one conclusion over another. The cases where faithfulness matters most for safety are the ones where goals might conflict with honest reasoning: an automated researcher with preferences about its research direction, an agent optimizing a metric, a model trying to appear aligned during evaluation. The worry isn't outright fabrication -- it's something closer to motivated reasoning, where the trace selectively cites supporting evidence while quietly dropping what contradicts the preferred conclusion. Every claim in the trace is true, but the picture is misleading because of what's absent. Understanding when this starts happening and whether it's detectable would give trace-based monitoring the ground truth it currently lacks.\n\n## Goal\n\n*We would produce degradation curves showing how reasoning faithfulness changes under increasing goal pressure, paired with probe-based detectors for when models have shifted into motivated reasoning.*\n\n## Approach\n\n- **Tasks with planted evidence**: We'd build tasks where the answer depends on weighing multiple pieces of evidence, some favoring each conclusion, with every piece individually verifiable. No-goal baselines establish natural citation rates for each piece; goal-pressure conditions then reveal how those rates shift. To isolate goal-induced bias from preexisting bias, the tasks would avoid topics where models have strong pretraining priors.\n- **Goal pressure gradient**: Rather than binary goal/no-goal, the design spans a spectrum -- from mild system-prompt preferences through explicit stakes tied to reaching the favored conclusion. We'd also vary whether the goal-favored answer is close to correct or clearly wrong, since motivated reasoning is easier to sustain when evidence is ambiguous. The core metric would be citation asymmetry: the gap between mention rates for pro-goal and anti-goal evidence, relative to baseline.\n- **Baseline calibration**: A control condition where the goal aligns with the correct answer would check whether goal pressure specifically corrupts reasoning when goals conflict with evidence or whether it amplifies reasoning distortions regardless.\n\nWith these measurements in hand, the next question is whether the pattern is detectable and whether it transfers beyond controlled tasks.\n\n- **Probe detection**: Linear probes on activations would be trained to distinguish motivated reasoning from neutral reasoning on matched tasks. The key question is generalization -- whether probes trained on cases where goal pressure changed evidence selection transfer to held-out task formats, suggesting they pick up the reasoning corruption rather than surface features of goal prompts.\n- **Monitor baselines**: We'd test whether a weaker model reviewing traces can distinguish motivated omission from innocent oversight, given the same evidence set. If monitors can't reliably make this distinction, that limits what trace-based safety can deliver in agentic settings.\n- **Agentic transfer**: The final check would be whether the degradation pattern replicates in coding tasks where models evaluate multiple approaches under system-prompt goals favoring one. We don't yet know whether format and complexity changes alter the picture entirely -- this is likely where our initial design needs the most revision.\n\n## Risks and Deliverables\n\nThe largest risk is that safety-trained models simply refuse or override conflicting goals rather than subtly corrupting their reasoning -- we'd need weaker-trained models or goal formulations that don't trigger refusal. A second concern is that planted-evidence tasks may feel artificial enough to change model behavior, limiting transfer to real settings. Minimum deliverable: faithfulness degradation curves across models and goal intensities. Stretch goals: working probe detectors for motivated reasoning and measurements of transfer to realistic agentic deployments.", "b_kind": "human", "b_title": "Faithful prompt attribution in language model self-explanation", "b_text": "## Motivation\n\nWhen a model misbehaves -- a coding agent misuses a library, or a frontier model takes a misaligned action in an agentic evaluation -- it's often unclear which parts of the input prompt drove that behavior. Counterfactual prompting can investigate this by swapping or removing components, but proper analysis is slow, requires careful experimental design, and doesn't scale. If models could faithfully report which input components caused their actions, auditors could distinguish genuine misaligned intent from situationally-forced misbehavior. Alignment researchers could more efficiently discover prompts that elicit misbehavior -- something that gets harder as model alignment improves. And everyday prompt engineering would become far more tractable. The core question is whether this self-explanation capability exists and can be trained.\n\n## Goal\n\n*We aim to evaluate and improve a model's ability to faithfully self-report which specific parts of its input prompt caused a particular output behavior -- a capability we call prompt attribution.*\n\n## Approach\n\n- **Counterfactual ground truth generation:** we establish labels by finding perturbations to prompt component X that change model M's action Y, giving us confidence that X causally influenced Y. Before building any training pipeline, we'd validate that discrete interpretable components actually drive the behaviors we care about by running prompt variations and measuring downstream behavioral shifts. White-box methods -- gradient attribution, probes, sparse autoencoders, token-level Shapley values -- could corroborate these counterfactual findings.\n\n- **Six evaluation settings at increasing difficulty:** at the easy end, biased few-shot prompts and injected hints largely reuse existing chain-of-thought faithfulness setups. Mid-range settings include tasks with categorical inputs where feature perturbations flip decisions, and prompted classification with intentionally fuzzy labels like \"harmful,\" \"lying,\" or \"emotional warmth\" -- crisp labels would make attribution trivially easy and wouldn't test real self-explanation. Harder settings include honeypot scenarios where perturbations modulate a model's misalignment rate (discoverable via open-source auditing tools), and agentic tasks where semantic harness-level changes degrade performance.\n\n- **Two evaluation question formats:** an inline retrospective format (\"Why did you do Y?\" asked after the action) and a prospective counterfactual format (\"What would you do if perturbation X were added?\"), each probing a different aspect of prompt-level self-awareness.\n\nWith trusted settings and ground truth labels in hand, we can train models to improve at prompt attribution.\n\n- **Supervised learning baseline:** we train on self-explanation questions with responses generated by a model given ground truth access, using IID train/test splits. Prior work shows somewhat positive results -- one line finds input-ablation self-explanation improves with supervised learning, another finds models can't report their decision processes by default on categorical-input tasks but IID training yields faithful self-reports -- suggesting the capability is latent but under-elicited.\n\n- **RL with behavioral verification:** for counterfactual questions, the reward checks whether the model's predicted outcome matches reality when we actually run the perturbation on the policy; for retrospective questions, we check whether the explanation mentions the known causal factor. Production deployment at frontier labs likely requires RL to generalize well beyond what supervised learning alone achieves.\n\n- **Adversarial redteamer loop:** an investigator agent tries to elicit misalignment from a target model, and the target model's self-report on why it didn't act misaligned is rewarded proportionally to how much it helps the investigator find effective inputs. A key failure mode across all approaches: during action, the model may not attend to which prompt components matter at all, so follow-up questions produce post-hoc rationalizations because attention is causal -- motivating prefixes like \"think carefully about your actions\" during training.\n\n## Risks and Deliverables\n\nThe primary risk is that models simply lack the internal capability for prompt attribution, making all training futile. Methodologically, we don't yet know whether the behaviors we care about are reliably driven by discrete prompt components. Minimum viable output: good evaluations for prompt attribution ability. A useful intermediate artifact: an agent skilled at generating counterfactual prompt hypotheses for investigating model behaviors, valuable even if full self-explanation training fails. Most ambitious: RL-based training that generalizes enough to ship."}, {"prompt_id": 14, "proposal_name": "encouraging_legibility_in_agents_for_control", "prompt_text": "Control evaluations used constrained coding tasks where attacks are clearly defined, but real agentic workflows — multi-step bash, file mutations, tool chains — blur the boundary between normal and suspicious. What research would make control evaluations reflect realistic agentic deployments?", "areas_of_ai_safety": ["AI Control", "Scalable Oversight"], "afp_score": 3, "comparison_type": "scaffold_vs_llm_baseline", "a_kind": "scaffold", "a_title": "Sabotage benchmarks for multi-step control evaluations", "a_text": "### Motivation\n\nMost control evaluation work has focused on a specific setting: a model submits a single piece of code, and auditors check for backdoors. The safety and usefulness numbers from these evaluations have shaped how labs think about monitoring, but there's a wide gap between this setup and actual agentic deployment. Real agents run multi-step workflows -- editing files, executing bash commands, installing packages, calling APIs -- where the attack surface spans an entire trajectory rather than one output. Prior agentic red-teaming work has shown models can complete harmful side-tasks while evading monitors, but those environments were built for capability measurement, not for stress-testing monitoring at operationally relevant false-positive rates. Closing this gap calls for task pairs where sabotage fits naturally into legitimate work, attack policies that spread harmful actions across steps, and monitoring baselines calibrated to trajectories rather than isolated actions.\n\n### Approach\n\n- **Dual-objective task pairs from real repositories**: we'd take issue-resolution tasks from open-source software projects and pair each with a concrete side-objective -- weakening a test assertion, introducing a vulnerable dependency, or planting a configuration that opens an access path. The pairing needs to feel natural; if sabotage requires actions that would never appear in the legitimate workflow, it won't exercise monitoring in a useful way.\n- **Multi-step attack elicitation via iterative prompting**: the hard part is getting models to interleave sabotage with legitimate work across many steps rather than concentrating it conspicuously. We'd prompt frontier models with both objectives, then iterate through a feedback loop -- run the trajectory, check whether sabotage was distributed or clumped, and adjust instructions accordingly.\n- **Monitoring at multiple granularities**: we'd evaluate detection per-action, over sliding windows, and on full trajectories. Per-action monitoring should catch clumsy attacks but generate compounding noise on long sessions; full-trajectory review catches more but only after the fact. The benchmark would report results at each granularity rather than choosing one.\n- **Attacker information sweeps**: we'd vary what the attack policy knows -- nothing about monitoring, the monitoring granularity, or the actual monitoring prompt -- producing evaluations at different difficulty tiers. The gap between tiers indicates how much safety depends on monitoring secrecy versus the protocol's structural properties.\n- **Adapted re-attack after monitor selection**: once we've identified the best monitoring configuration, we'd re-run attack elicitation with full knowledge of that configuration, then re-measure detection rates. This keeps the benchmark from rewarding setups that happen to defeat our initial attack strategies but would break against an adapted adversary.\n\n### Risks and Trade-offs\n\nHand-designed sabotage objectives may not predict what a misaligned model would actually attempt -- we're choosing the attack distribution rather than observing it. There's a dual-use concern in publishing effective attack strategies, though the sabotage types we'd study (test weakening, configuration tampering) are already well-known in security. Scalability is a practical worry too: each task pair requires manual validation, and the attack elicitation loop is labor-intensive.\n\n### Evaluation and Output\n\nWe'd hold out a third of task pairs for final evaluation, reporting detection rates at low fixed false-positive thresholds where human auditors could realistically review flagged sessions. We'd compare these against published single-action control evaluation results to quantify how much harder monitoring gets when attacks are embedded in realistic workflows. The central deliverable is **a benchmark of paired legitimate/sabotage agentic tasks with calibrated attack policies at multiple difficulty levels**, released with attack prompts and baseline monitor results for other teams to build on.", "b_kind": "llm_baseline", "b_title": "Stress-testing agentic control under behavioral ambiguity", "b_text": "### Motivation\n\nControl evaluations today typically check whether safety protocols can catch a scheming model executing a well-defined attack -- inserting a backdoor into generated code, say. The task structure is constrained enough that \"attack\" and \"normal completion\" are separable in principle, even when detection is hard. In realistic agentic deployments, though, models run multi-step bash pipelines, rewrite configuration files, install dependencies, and orchestrate tool chains -- and the behavioral surface of legitimate work overlaps heavily with sabotage. Prior work on narrower coding tasks has shown that trusted monitors can flag many attacks when the action space is small, but we don't know whether those detection rates hold once agents routinely perform operations indistinguishable from early attack stages. This project would build evaluation protocols that force that ambiguity into the testing loop.\n\n### Approach\n\n- **Ambiguity-saturated task suites** -- We'd assemble evaluation tasks whose correct completions inherently require actions overlapping with known attack patterns: editing system configs, writing outside project directories, piping data between tools, chaining shell commands. Any monitor tuned to catch these actions faces a raised false-positive floor, making protocol-level separation harder.\n\n- **Multi-step trajectory evaluations** -- Each task spans dozens of sequential actions -- planning, running shell commands, reading outputs, adapting -- in realistic multi-tool workflows where the model's choices compound over time. Attacks can be spread across steps, forcing monitors to reason over whole trajectories rather than flag individual actions.\n\n- **Tool-permission attack surface mapping** -- For tool-chain configurations common in agentic setups -- shell access, file I/O, network calls, package managers -- we'd enumerate covert channels an attacker could exploit and check whether existing monitors cover them. The output is a concrete gap list per configuration.\n\n- **Steganographic red-team attacks** -- A red team would craft attacks whose individual steps look like normal agent behavior but collectively achieve a harmful outcome -- for instance, gradually altering a build script across edits to introduce a dependency with a known vulnerability, or chaining innocuous file reads into a data-exfiltration pipeline.\n\n- **Degradation curves across ambiguity levels** -- We'd rerun published control protocols on these new task suites and plot detection rate against a graded ambiguity measure, producing curves that show where each monitoring method breaks and how much headroom a given setup retains.\n\n### Risks and Trade-offs\n\nThe clearest tension is dual-use: publishing detailed ambiguity-saturated benchmarks also hands a scheming model (or a malicious fine-tuner) a catalog of attack surfaces that blend into normal work. There's also a scoring problem -- when legitimate and adversarial behavior truly overlap, ground truth labels become judgment calls, and results can shift depending on annotator conventions. Multi-step evaluations are also expensive; a single run costs far more than a constrained coding task, which limits how many protocol variants we can test on a fixed budget.\n\n### Evaluation and Output\n\nOur baseline is detection rates reported in existing control evaluations on constrained coding tasks. The primary metric is worst-case detection rate: for each protocol, we'd measure the attack variant that achieves the lowest detection probability across the full ambiguity-saturated suite. Evaluation is iterative -- after each round, the red team re-optimizes attacks against updated monitors, so results don't just reflect a static adversary. The project delivers **empirical degradation curves** and an evaluation protocol that labs can adapt and run on their own agentic pipelines to stress-test monitoring setups under realistic behavioral ambiguity."}];
+
+let currentIdx = 0;
+const state = loadState();
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+        // Defensive: ensure every question has a record.
+        for (const q of QUESTIONS) {
+          if (!parsed.responses[q.prompt_id]) {
+            parsed.responses[q.prompt_id] = { winner: null, notes: "" };
+          } else if (parsed.responses[q.prompt_id].notes === undefined) {
+            parsed.responses[q.prompt_id].notes = "";
+          }
+        }
+        return parsed;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  const fresh = { batch_id: BATCH_ID, responses: {} };
+  for (const q of QUESTIONS) {
+    fresh.responses[q.prompt_id] = { winner: null, notes: "" };
+  }
+  return fresh;
+}
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function renderMd(text) {
+  if (!text) return '<span style="color: var(--muted);">(no text)</span>';
+  return marked.parse(text);
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderOnboardingSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="onboarding-section">
+      <div class="sec-title">${escapeHtml(sec.title)}</div>
+      <div class="sec-body">${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderHelpSectionsHTML() {
+  let html = '';
+  for (const sec of ONBOARDING_SECTIONS) {
+    html += `<div class="help-section">
+      <div class="h-title">${escapeHtml(sec.title)}</div>
+      <div>${renderMd(sec.body)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function renderOnboarding() {
+  const card = document.getElementById('onboarding-card');
+  card.innerHTML = `<h2>Instructions</h2>${renderOnboardingSectionsHTML()}
+    <div class="onboarding-start-wrap">
+      <button class="onboarding-start-btn" onclick="startEval()">Start ranking &rarr;</button>
+    </div>`;
+  document.getElementById('help-content').innerHTML = renderHelpSectionsHTML();
+}
+
+const ONBOARDING_SEEN_KEY = 'pairwise_onboarding_seen_' + BATCH_ID;
+const PAIRWISE_REG_KEY = 'pairwise_reg_' + BATCH_ID;
+
+/* Returns {name, email, registered_at, ...} or null.
+ * Reads in-page registration first; falls back to any reg_prod_* key set by
+ * the prod registration_page.html (publish_pairwise_to_prod). */
+function getRegistration() {
+  try {
+    const raw = localStorage.getItem(PAIRWISE_REG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('reg_prod_')) {
+        const v = localStorage.getItem(k);
+        if (v) return JSON.parse(v);
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+function validEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
+function onRegInput() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const btn = document.getElementById('reg-submit-btn');
+  const err = document.getElementById('reg-error');
+  err.textContent = (email && !validEmail(email)) ? 'That doesn’t look like a valid email.' : '';
+  btn.disabled = !(name && validEmail(email));
+}
+
+function submitRegistration() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  if (!name || !validEmail(email)) return;
+  const reg = { name: name, email: email, registered_at: new Date().toISOString() };
+  try { localStorage.setItem(PAIRWISE_REG_KEY, JSON.stringify(reg)); } catch (e) {}
+  document.getElementById('registration-screen').classList.add('hidden');
+  if (hasSeenOnboarding()) {
+    document.getElementById('eval-screen').classList.remove('hidden');
+    refreshProgress();
+  } else {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  }
+}
+
+function hasSeenOnboarding() {
+  try { return !!localStorage.getItem(ONBOARDING_SEEN_KEY); } catch (e) { return false; }
+}
+
+function startEval() {
+  document.getElementById('onboarding-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  try { localStorage.setItem(ONBOARDING_SEEN_KEY, '1'); } catch (e) {}
+  refreshProgress();
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+/* Decide which screen to show first.
+ * In prod (publish_pairwise_to_prod injects `const EVAL_ID = ...`) the standalone
+ * registration_page.html already collected the rater info before redirecting here,
+ * so we skip our in-page registration. Onboarding still shows on the first visit
+ * (or any visit before "Start ranking →" has been clicked). */
+function initFlow() {
+  const inProd = (typeof EVAL_ID !== 'undefined');
+  if (!inProd && !getRegistration()) {
+    document.getElementById('registration-screen').classList.remove('hidden');
+    setTimeout(() => document.getElementById('reg-name').focus(), 50);
+  } else if (!hasSeenOnboarding()) {
+    document.getElementById('onboarding-screen').classList.remove('hidden');
+  } else {
+    document.getElementById('eval-screen').classList.remove('hidden');
+  }
+}
+
+function showHelp() {
+  document.getElementById('help-overlay').classList.remove('hidden');
+}
+function hideHelp() {
+  document.getElementById('help-overlay').classList.add('hidden');
+}
+
+function renderPager() {
+  const host = document.getElementById('pager');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const answered = state.responses[q.prompt_id] && state.responses[q.prompt_id].winner;
+    const cls = ['pager-dot'];
+    if (i === currentIdx) cls.push('current');
+    if (answered) cls.push('answered');
+    html += `<span class="${cls.join(' ')}" title="Pair ${i + 1}${answered ? ' — winner picked' : ''}" onclick="goTo(${i})">${i + 1}</span>`;
+  });
+  host.innerHTML = html;
+}
+
+function renderQuestion() {
+  const q = QUESTIONS[currentIdx];
+  const resp = state.responses[q.prompt_id] || {};
+
+  document.getElementById('idea-grid').innerHTML = `
+    <div class="idea-card" data-side="A">
+      <div class="card-head">
+        <span class="idea-badge a">A</span>
+        <div class="idea-title">${escapeHtml(q.a_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.a_text)}</div>
+    </div>
+    <div class="idea-card" data-side="B">
+      <div class="card-head">
+        <span class="idea-badge b">B</span>
+        <div class="idea-title">${escapeHtml(q.b_title)}</div>
+      </div>
+      <div class="idea-body">${renderMd(q.b_text)}</div>
+    </div>`;
+
+  refreshPrefButtons(resp.winner);
+  document.getElementById('notes-current').value = resp.notes || '';
+  document.getElementById('prev-btn').disabled = currentIdx <= 0;
+  // Last pair: "Review →" leads to summary. Earlier pairs: standard Next.
+  const isLast = currentIdx >= QUESTIONS.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.disabled = false;
+  nextBtn.textContent = isLast ? 'Review →' : 'Next →';
+}
+
+function refreshPrefButtons(choice) {
+  document.querySelectorAll('#pref-row .pref-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.choice === choice);
+  });
+}
+
+function pick(choice) {
+  if (!['A', 'B', 'tie'].includes(choice)) return;
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].winner = choice;
+  refreshPrefButtons(choice);
+  saveState();
+  renderPager();
+  refreshProgress();
+}
+
+function onNotesInput(value) {
+  const q = QUESTIONS[currentIdx];
+  if (!state.responses[q.prompt_id]) state.responses[q.prompt_id] = { winner: null, notes: "" };
+  state.responses[q.prompt_id].notes = value;
+  saveState();
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= QUESTIONS.length) return;
+  currentIdx = idx;
+  renderQuestion();
+  renderPager();
+  refreshProgress();
+}
+
+function navPrev() {
+  if (!document.getElementById('summary-screen').classList.contains('hidden')) {
+    exitSummary();
+    return;
+  }
+  goTo(currentIdx - 1);
+}
+function navNext() {
+  if (currentIdx >= QUESTIONS.length - 1) {
+    showSummary();
+  } else {
+    goTo(currentIdx + 1);
+  }
+}
+
+const PREF_LABEL = { 'A': 'A is better', 'B': 'B is better', 'tie': 'Both are equal' };
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const n = countAnswered();
+  document.getElementById('summary-sub').textContent = `${n} of ${total} answered. Review your picks below, then submit.`;
+  const list = document.getElementById('summary-list');
+  let html = '';
+  QUESTIONS.forEach((q, i) => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;
+    const cls = choice ? '' : 'unanswered';
+    const aWin = choice === 'A' || choice === 'tie';
+    const bWin = choice === 'B' || choice === 'tie';
+    const pickClass = choice === 'tie' ? 'tie' : (choice ? '' : 'none');
+    const pickLabel = choice ? PREF_LABEL[choice] : 'Not answered';
+    html += `<div class="summary-row ${cls}" onclick="jumpFromSummary(${i})">
+      <div class="pair-no">Pair ${i + 1}</div>
+      <div class="summary-titles">
+        <div class="summary-title ${aWin ? 'winner' : ''}"><span class="idea-badge">A</span><span class="ttext">${escapeHtml(q.a_title)}</span></div>
+        <div class="summary-title ${bWin ? 'winner' : ''}"><span class="idea-badge">B</span><span class="ttext">${escapeHtml(q.b_title)}</span></div>
+      </div>
+      <div class="summary-pick ${pickClass}">${pickLabel}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+}
+
+function showSummary() {
+  document.getElementById('eval-screen').classList.add('hidden');
+  document.getElementById('summary-screen').classList.remove('hidden');
+  renderSummary();
+  refreshProgress();
+}
+
+function exitSummary() {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  // Land back on the last pair so Prev/Next still make sense.
+  goTo(Math.min(currentIdx, QUESTIONS.length - 1));
+}
+
+function jumpFromSummary(idx) {
+  document.getElementById('summary-screen').classList.add('hidden');
+  document.getElementById('eval-screen').classList.remove('hidden');
+  goTo(idx);
+}
+
+function countAnswered() {
+  let n = 0;
+  for (const q of QUESTIONS) {
+    const r = state.responses[q.prompt_id];
+    if (r && r.winner) n++;
+  }
+  return n;
+}
+
+function refreshProgress() {
+  const n = countAnswered();
+  const total = QUESTIONS.length;
+  const pct = total === 0 ? 0 : Math.round((n / total) * 100);
+  const onSummary = !document.getElementById('summary-screen').classList.contains('hidden');
+  document.getElementById('topbar-sub').textContent = onSummary
+    ? `Summary · ${n} of ${total} answered`
+    : `Pair ${currentIdx + 1} of ${total} · ${n} of ${total} answered`;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  for (const id of ['submit-btn', 'summary-submit-btn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.disabled = (n < total);
+    btn.textContent = `Submit (${n} / ${total})`;
+  }
+}
+
+function downloadResults() {
+  const rankings = QUESTIONS.map(q => {
+    const r = state.responses[q.prompt_id] || {};
+    const choice = r.winner || null;  // 'A' | 'B' | 'tie' | null
+    let ratings, comparison;
+    if (choice === 'A')      { ratings = { 0: 10, 1: 0 };  comparison = 'A>B'; }
+    else if (choice === 'B') { ratings = { 0: 0,  1: 10 }; comparison = 'B>A'; }
+    else if (choice === 'tie') { ratings = { 0: 5, 1: 5 }; comparison = '≈'; }
+    else                       { ratings = { 0: null, 1: null }; comparison = null; }
+    return {
+      prompt_id: q.prompt_id,
+      proposal_name: q.proposal_name,
+      prompt: q.prompt_text,
+      idea_titles: [q.a_title, q.b_title],
+      choice: choice,
+      notes: r.notes || "",
+      // v5-compatible bookkeeping (so existing prod firebase write doesn't care).
+      order: [0, 1],
+      ratings: ratings,
+      comparisons: comparison ? { "1-2": comparison } : {},
+      pairwise_choice: choice ? { choice: choice } : null,
+    };
+  });
+  const out = {
+    timestamp: new Date().toISOString(),
+    batch_id: BATCH_ID,
+    batch_title: BATCH_TITLE,
+    storage_key: STORAGE_KEY,
+    registration: getRegistration(),
+    total_prompts: QUESTIONS.length,
+    ranked: countAnswered(),
+    rankings: rankings,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pairwise_${BATCH_ID}_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return out;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const helpOpen = !document.getElementById('help-overlay').classList.contains('hidden');
+  if (e.key === 'Escape') {
+    if (helpOpen) { e.preventDefault(); hideHelp(); }
+    return;
+  }
+  if (helpOpen) return;
+  if (e.key === '?') { e.preventDefault(); showHelp(); return; }
+  // Lock keyboard controls until we're on the eval screen.
+  if (document.getElementById('eval-screen').classList.contains('hidden')) return;
+  if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); navPrev(); }
+  else if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); navNext(); }
+  else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); pick('A'); }
+  else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); pick('B'); }
+  else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); pick('tie'); }
+});
+
+renderOnboarding();
+renderPager();
+renderQuestion();
+refreshProgress();
+initFlow();
+
+/* ==== PROD INJECTIONS (pairwise) ==== */
+
+/* ---- Firebase ---- */
+let _firestoreDb = null;
+
+function getFirestore() {
+    if (_firestoreDb) return _firestoreDb;
+    if (typeof FIREBASE_CONFIG === 'undefined' || FIREBASE_CONFIG.apiKey === 'REPLACE_ME') {
+        console.warn('Firebase not configured — submissions will only be saved locally');
+        return null;
+    }
+    try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        _firestoreDb = firebase.firestore();
+        return _firestoreDb;
+    } catch(e) {
+        console.error('Firebase init failed:', e);
+        return null;
+    }
+}
+
+async function submitToFirebase(results) {
+    const db = getFirestore();
+    if (!db) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    const doc = {
+        registration: reg,
+        rankings: results,
+        eval_id: EVAL_ID,
+        submitted_at: firebase.firestore.FieldValue.serverTimestamp(),
+        client_timestamp: new Date().toISOString(),
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+    };
+
+    try {
+        const ref = await db.collection('evaluations').doc(EVAL_ID)
+            .collection('submissions').add(doc);
+        console.log('Submitted to Firebase:', ref.id);
+        return { success: true, id: ref.id };
+    } catch(e) {
+        console.error('Firebase submission failed:', e);
+        return { success: false, reason: e.message };
+    }
+}
+
+
+/* ---- EmailJS ---- */
+let _emailjsInitialized = false;
+
+function initEmailJS() {
+    if (_emailjsInitialized) return true;
+    if (typeof EMAILJS_CONFIG === 'undefined' || EMAILJS_CONFIG.public_key === 'REPLACE_ME') {
+        console.warn('EmailJS not configured — results will not be emailed');
+        return false;
+    }
+    if (typeof emailjs === 'undefined') {
+        console.warn('EmailJS SDK not loaded');
+        return false;
+    }
+    try {
+        emailjs.init(EMAILJS_CONFIG.public_key);
+        _emailjsInitialized = true;
+        return true;
+    } catch(e) {
+        console.error('EmailJS init failed:', e);
+        return false;
+    }
+}
+
+async function sendResultsEmail(results) {
+    if (!initEmailJS()) return { success: false, reason: 'not_configured' };
+
+    const reg = getRegistration();
+    if (!reg || !reg.email) return { success: false, reason: 'no_registration' };
+
+    const ranked = results.ranked || 0;
+    const total = results.total_prompts || 0;
+    const raterName = reg.name.replace(/\s+/g, '_').toLowerCase();
+
+    // Full base64 data URI for EmailJS "Variable Attachment"
+    const fullJson = JSON.stringify(results, null, 2);
+    const jsonBase64 = btoa(unescape(encodeURIComponent(fullJson)));
+    const dataUri = 'data:application/json;base64,' + jsonBase64;
+
+    const templateParams = {
+        to_name: reg.name,
+        to_email: reg.email,
+        eval_id: EVAL_ID,
+        summary: `${ranked} of ${total} prompts ranked`,
+        results_json: dataUri,
+    };
+
+    try {
+        await emailjs.send(
+            EMAILJS_CONFIG.service_id,
+            EMAILJS_CONFIG.template_id,
+            templateParams
+        );
+        console.log('Results emailed to', reg.email);
+        return { success: true };
+    } catch(e) {
+        console.error('Email send failed:', e);
+        const reason = e.text || e.message || (typeof e === 'string' ? e : JSON.stringify(e));
+        return { success: false, reason: reason };
+    }
+}
+
+
+/* ---- Pairwise Eval Page: Prod Overrides ----
+ * Drop-in counterpart to 8_human_ranking_ui_prod/scripts/prod_fragments/eval_overrides.js,
+ * but tailored to the pairwise UI globals defined by generate_pairwise_ui.py
+ * (STORAGE_KEY, EVAL_ID, state, saveState, downloadResults, countAnswered, QUESTIONS).
+ */
+
+const REG_KEY = 'reg_prod_' + EVAL_ID;
+
+const _regData = localStorage.getItem(REG_KEY);
+if (!_regData) {
+    window.location.href = '../';
+}
+
+function getRegistration() {
+    try {
+        const saved = localStorage.getItem(REG_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+}
+
+function hashEmail(email) {
+    let hash = 5381;
+    for (let i = 0; i < email.length; i++) {
+        hash = ((hash << 5) + hash) + email.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+/* Namespace localStorage by eval + rater, then reload state from the new key. */
+(function () {
+    const reg = getRegistration();
+    if (reg) {
+        STORAGE_KEY = 'rankings_prod_' + EVAL_ID + '_' + hashEmail(reg.email);
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.batch_id === BATCH_ID && parsed.responses) {
+                    for (const k of Object.keys(state.responses)) {
+                        if (parsed.responses[k]) state.responses[k] = parsed.responses[k];
+                    }
+                    if (typeof renderQuestions === 'function') renderQuestions();
+                    if (typeof refreshProgress === 'function') refreshProgress();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+})();
+
+/* Wrap downloadResults so it (a) writes locally, (b) submits to Firebase,
+ * (c) emails the rater their JSON. */
+const _originalDownloadResults = downloadResults;
+downloadResults = async function () {
+    const output = _originalDownloadResults();
+    output.eval_id = EVAL_ID;
+    output.registration = getRegistration();
+
+    const statusEl = document.getElementById('submission-status');
+    if (statusEl) {
+        statusEl.innerHTML = '<span style="color:var(--text-secondary)">Submitting...</span>';
+        statusEl.classList.remove('hidden');
+    }
+
+    const fbResult = await submitToFirebase(output);
+    const emailResult = await sendResultsEmail(output);
+
+    if (statusEl) {
+        const parts = [];
+        if (fbResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Saved to server</span>');
+        } else if (fbResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Server not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Server save failed — your download has your data</span>');
+        }
+        const reg = getRegistration();
+        if (emailResult.success) {
+            parts.push('<span style="color:#4A9B7F">&#10003; Results emailed to ' + (reg ? reg.email : '?') + '</span>');
+        } else if (emailResult.reason === 'not_configured') {
+            parts.push('<span style="color:var(--text-secondary)">Email not configured</span>');
+        } else {
+            parts.push('<span style="color:var(--primary)">&#10007; Email failed: ' + (emailResult.reason || 'unknown') + '</span>');
+        }
+        statusEl.innerHTML = parts.join('<br>');
+    }
+};
+
+/* Auto-save partial progress to Firebase (debounced 30s) on every state change. */
+let _autoSaveTimer = null;
+const _originalSaveState = saveState;
+saveState = function () {
+    _originalSaveState();
+    clearTimeout(_autoSaveTimer);
+    _autoSaveTimer = setTimeout(async () => {
+        const partial = {
+            timestamp: new Date().toISOString(),
+            eval_id: EVAL_ID,
+            batch_id: BATCH_ID,
+            batch_title: BATCH_TITLE,
+            registration: getRegistration(),
+            total_prompts: QUESTIONS.length,
+            ranked: countAnswered(),
+            is_partial: true,
+            responses: state.responses,
+        };
+        await submitToFirebase(partial);
+    }, 30000);
+};
+
+
+/* ==== END PROD INJECTIONS ==== */
+</script>
+</body>
+</html>
